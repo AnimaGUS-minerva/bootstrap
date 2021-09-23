@@ -8,3 +8,8 @@ futures    = "0.3.15"
 structopt  = "0.3"
 tokio         = { version = "1.7",  features = [ "macros", "io-util", "time", "process", "sync", "signal", "rt-multi-thread"] }
 url        = "*"
+# mbedtls = { version = "0.8.1", optional = true }
+# mbedtls-sys-auto = "*"
+psa-crypto = "0.9.0"
+
+

@@ -17,6 +17,7 @@
 use std::sync::Arc;
 use tokio::runtime;
 use structopt::StructOpt;
+use psa_crypto;
 
 pub mod args;
 
@@ -45,6 +46,8 @@ static DEFAULT_JOIN_THREADS: u16 = 16;
 
 async fn bootstrap(_args: args::BootstrapOptions) -> Result<(), String> {
     println!("Hello");
+
+    psa_crypto::init().unwrap();
 
     Ok(())
 }
