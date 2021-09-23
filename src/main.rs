@@ -18,11 +18,10 @@ use std::sync::Arc;
 use tokio::runtime;
 use structopt::StructOpt;
 use psa_crypto;
-use dns_lookup::{AddrInfo, AddrInfoHints, getaddrinfo, SockType};
-use url::Url;
-use std::collections::VecDeque;
 
 pub mod args;
+pub mod bootstrap;
+use bootstrap::BootstrapState;
 
 static VERSION: &str = "0.9.0";
 static DEFAULT_JOIN_THREADS: u16 = 16;
@@ -45,45 +44,6 @@ static DEFAULT_JOIN_THREADS: u16 = 16;
  *    the queue to be dealt with soon.
  *
  */
-
-struct JoinProxyInfo {
-    url:  Url,
-    addrs: Vec<AddrInfo>
-}
-
-struct BootstrapState {
-    registrars: VecDeque<JoinProxyInfo>,
-}
-impl BootstrapState {
-    pub fn empty() -> Self {
-        BootstrapState { registrars: VecDeque::new() }
-    }
-
-    pub fn add_registrar_by_url(self: &mut Self, url: Url) {
-
-        let hints = match url.scheme() {
-            "https" => AddrInfoHints {
-                socktype: SockType::Stream.into(),
-                .. AddrInfoHints::default()
-            },
-            "coaps" => AddrInfoHints {
-                socktype: SockType::DGram.into(),
-                .. AddrInfoHints::default()
-            },
-            oscheme => { panic!("invalid scheme {}", oscheme); }
-        };
-
-        let service = format!("{}", url.port().unwrap());
-        let hoststr = url.host_str().unwrap();
-        let addrs   = getaddrinfo(Some(hoststr), Some(&service), Some(hints))
-            .unwrap().collect::<std::io::Result<Vec<_>>>().unwrap();
-        self.registrars.push_back(JoinProxyInfo {
-            url:   url,
-            addrs: addrs
-        })
-    }
-}
-
 
 async fn bootstrap(args: args::BootstrapOptions) -> Result<(), String> {
     let mut state = BootstrapState::empty();
