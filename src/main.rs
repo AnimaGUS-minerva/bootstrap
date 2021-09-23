@@ -1,35 +1,27 @@
+/*
+ * Copyright [2021] <mcr@sandelman.ca>
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+ *
+ */
 use std::sync::Arc;
-use std::path::PathBuf;
 use tokio::runtime;
 use structopt::StructOpt;
-use url::Url;
+
+pub mod args;
 
 static VERSION: &str = "0.9.0";
 static DEFAULT_JOIN_THREADS: u16 = 16;
-
-#[derive(StructOpt)]
-// Hermes Connect Autonomic Control Plane (ACP) manager
-struct ConnectOptions {
-    // turn on debugging from Grasp DULL
-    #[structopt(default_value = "false", long, parse(try_from_str))]
-    debug_bootstrap: bool,
-
-    // override search and just connect to Registrar URI provided
-    #[structopt(parse(try_from_str = Url::parse))]
-    registrar: Option<Url>,
-
-    // where to find the IDevID certificate
-    #[structopt(parse(from_os_str))]
-    idevid_cert: Option<PathBuf>,
-
-    // where to find the IDevID private key
-    #[structopt(parse(from_os_str))]
-    idevid_priv: Option<PathBuf>,
-
-    /// Output dir for LDevID
-    #[structopt(parse(from_os_str))]
-    ldevid_cert: Option<PathBuf>,
-}
 
 /*
  * Bootstrap is a program in a few distinct states.
@@ -51,7 +43,7 @@ struct ConnectOptions {
 */
 
 
-async fn bootstrap(_args: ConnectOptions) -> Result<(), String> {
+async fn bootstrap(_args: args::BootstrapOptions) -> Result<(), String> {
     println!("Hello");
 
     Ok(())
@@ -61,7 +53,7 @@ fn main () -> Result<(), String> {
 
     println!("Hermes Bootstrap {}", VERSION);
 
-    let args = ConnectOptions::from_args();
+    let args = args::BootstrapOptions::from_args();
 
     // tokio 1.7
     let brt = runtime::Builder::new_multi_thread()
