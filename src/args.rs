@@ -23,23 +23,23 @@ use url::Url;
 pub struct BootstrapOptions {
     // turn on debugging from Grasp DULL
     #[structopt(default_value = "false", long, parse(try_from_str))]
-    debug_bootstrap: bool,
+    pub debug_bootstrap: bool,
 
     // override search and just connect to Registrar URI provided
     #[structopt(parse(try_from_str = Url::parse))]
-    registrar: Option<Url>,
+    pub registrar: Option<Url>,
 
     // where to find the IDevID certificate
     #[structopt(parse(from_os_str))]
-    idevid_cert: Option<PathBuf>,
+    pub idevid_cert: Option<PathBuf>,
 
     // where to find the IDevID private key
     #[structopt(parse(from_os_str))]
-    idevid_priv: Option<PathBuf>,
+    pub idevid_priv: Option<PathBuf>,
 
     /// Output dir for LDevID
     #[structopt(parse(from_os_str))]
-    ldevid_cert: Option<PathBuf>,
+    pub ldevid_cert: Option<PathBuf>,
 }
 
 #[cfg(test)]

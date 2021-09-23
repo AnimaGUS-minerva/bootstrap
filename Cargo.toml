@@ -11,5 +11,5 @@ url        = "*"
 # mbedtls = { version = "0.8.1", optional = true }
 # mbedtls-sys-auto = "*"
 psa-crypto = "0.9.0"
-
+dns-lookup = "1.0.8"
 
