@@ -51,7 +51,7 @@ async fn bootstrap(args: args::BootstrapOptions) -> Result<(), String> {
     psa_crypto::init().unwrap();
 
     if let Some(url) = args.registrar {
-        state.add_registrar_by_url(url.clone());
+        state.add_registrar_by_url(url.clone()).unwrap();
     }
 
     Ok(())

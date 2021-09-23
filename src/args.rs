@@ -52,6 +52,13 @@ pub mod tests {
             debug_bootstrap: true,
             registrar: None, idevid_cert: None, idevid_priv: None, ldevid_cert: None
         }, BootstrapOptions::from_iter(&["debug_bootstrap", "true"]));
+
+        assert_eq!(BootstrapOptions {
+            debug_bootstrap: false,
+            registrar: Some(Url::parse("https://example.com/brski/rv").unwrap()),
+            idevid_cert: None, idevid_priv: None, ldevid_cert: None
+        }, BootstrapOptions::from_iter(&["registrar", "https://example.com/brski/rv"]));
+
         Ok(())
     }
 }

@@ -14,13 +14,14 @@
    limitations under the License.
  *
  */
-use dns_lookup::{AddrInfo, AddrInfoHints, getaddrinfo, SockType};
+//use dns_lookup::{AddrInfo, AddrInfoHints, lookup_host, getaddrinfo, SockType};
+use dns_lookup::{lookup_host};
 use url::Url;
 use std::collections::VecDeque;
 
 struct JoinProxyInfo {
     url:  Url,
-    addrs: Vec<AddrInfo>
+    addrs: Vec<std::net::IpAddr>
 }
 
 pub struct BootstrapState {
@@ -31,30 +32,45 @@ impl BootstrapState {
         BootstrapState { registrars: VecDeque::new() }
     }
 
-    pub fn add_registrar_by_url(self: &mut Self, url: Url) {
+    pub fn add_registrar_by_url(self: &mut Self, url: Url) -> Result<(), std::io::Error> {
 
-        let hints = match url.scheme() {
-            "https" => AddrInfoHints {
-                socktype: SockType::Stream.into(),
-                .. AddrInfoHints::default()
-            },
-            "coaps" => AddrInfoHints {
-                socktype: SockType::DGram.into(),
-                .. AddrInfoHints::default()
-            },
-            oscheme => { panic!("invalid scheme {}", oscheme); }
-        };
-
-        let service = format!("{}", url.port().unwrap());
-        let hoststr = url.host_str().unwrap();
-        let addrs   = getaddrinfo(Some(hoststr), Some(&service), Some(hints))
-            .unwrap().collect::<std::io::Result<Vec<_>>>().unwrap();
+        let hostname = url.host_str().unwrap();
+        let hosts = lookup_host(hostname)?;
         self.registrars.push_back(JoinProxyInfo {
             url:   url,
-            addrs: addrs
-        })
+            addrs: hosts
+        });
+        Ok(())
+
     }
 }
+
+#[cfg(test)]
+pub mod tests {
+    use super::*;
+
+    #[test]
+    fn test_add_registrar_url() -> Result<(), std::io::Error> {
+        let url = Url::parse("https://example.com/.well-known/brski/requestvoucher").unwrap();
+
+        let mut state = BootstrapState::empty();
+        state.add_registrar_by_url(url)?;
+
+        assert_eq!(state.registrars.len(), 1);
+        Ok(())
+     }
+
+    #[test]
+    fn test_add_bad_registrar_url() {
+        let url = Url::parse("https://foobar.example/.well-known/brski/requestvoucher").unwrap();
+
+        let mut state = BootstrapState::empty();
+
+        let ekind = state.add_registrar_by_url(url).map_err(|e| e.kind());
+        assert_eq!(Err(std::io::ErrorKind::Other), ekind);
+    }
+}
+
 
 
 /*
