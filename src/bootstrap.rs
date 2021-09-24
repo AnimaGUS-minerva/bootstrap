@@ -43,6 +43,19 @@ impl BootstrapState {
         Ok(())
 
     }
+
+    pub fn add_registrar_by_ip(self: &mut Self, ip: std::net::IpAddr) -> Result<(), std::io::Error> {
+
+        let mut url = Url::from_file_path("/.well-known/brski/request/voucher").unwrap();
+        url.set_ip_host(ip).unwrap();
+        let hosts = vec![ip];
+        self.registrars.push_back(JoinProxyInfo {
+            url:   url,
+            addrs: hosts
+        });
+        Ok(())
+
+    }
 }
 
 #[cfg(test)]
@@ -58,7 +71,18 @@ pub mod tests {
 
         assert_eq!(state.registrars.len(), 1);
         Ok(())
-     }
+    }
+
+    #[test]
+    fn test_add_registrar_ip() -> Result<(), std::io::Error> {
+        let mut state = BootstrapState::empty();
+
+        let ipaddr = "fe80::1234".parse().unwrap();
+        state.add_registrar_by_ip(ipaddr)?;
+
+        assert_eq!(state.registrars.len(), 1);
+        Ok(())
+    }
 
     #[test]
     fn test_add_bad_registrar_url() {
