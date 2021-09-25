@@ -46,13 +46,34 @@ static DEFAULT_JOIN_THREADS: u16 = 16;
  */
 
 async fn bootstrap(args: args::BootstrapOptions) -> Result<(), String> {
-    let mut state = BootstrapState::empty();
+    let (sender, mut receiver) = BootstrapState::channel();
+    let mut state = BootstrapState::empty(sender);
 
     psa_crypto::init().unwrap();
 
     if let Some(url) = args.registrar {
-        state.add_registrar_by_url(url.clone()).unwrap();
+        state.add_registrar_by_url(url.clone()).await.unwrap();
+    } else {
+        // start loop looking for interfaces,
+        // and within that loop, listen for GRASP announcements
     }
+
+    // now make loop that looks for new Registrars to process.
+    // when Bootstrap.registrar is empty, then wait for signal
+    //rt.spawn(async move {   // receiver moved
+        loop {
+            let regopt = receiver.recv().await;
+            match regopt {
+                Some(mut reg) => { reg.connect() },
+                None => { break; }
+            }
+        }
+
+        // we get here because sender got dropped
+    //});
+
+    //
+
 
     Ok(())
 }
