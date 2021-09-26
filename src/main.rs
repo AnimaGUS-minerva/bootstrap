@@ -14,8 +14,7 @@
    limitations under the License.
  *
  */
-use std::sync::Arc;
-use tokio::runtime;
+//use std::sync::Arc;
 use structopt::StructOpt;
 use psa_crypto;
 
@@ -45,14 +44,14 @@ static DEFAULT_JOIN_THREADS: u16 = 16;
  *
  */
 
-async fn bootstrap(args: args::BootstrapOptions) -> Result<(), String> {
-    let (sender, mut receiver) = BootstrapState::channel();
+fn bootstrap(args: args::BootstrapOptions) -> Result<(), String> {
+    let (sender, receiver) = BootstrapState::channel();
     let mut state = BootstrapState::empty(sender);
 
     psa_crypto::init().unwrap();
 
     if let Some(url) = args.registrar {
-        state.add_registrar_by_url(url.clone()).await.unwrap();
+        state.add_registrar_by_url(url.clone()).unwrap();
     } else {
         // start loop looking for interfaces,
         // and within that loop, listen for GRASP announcements
@@ -61,13 +60,9 @@ async fn bootstrap(args: args::BootstrapOptions) -> Result<(), String> {
     // now make loop that looks for new Registrars to process.
     // when Bootstrap.registrar is empty, then wait for signal
     //rt.spawn(async move {   // receiver moved
-        loop {
-            let regopt = receiver.recv().await;
-            match regopt {
-                Some(mut reg) => { reg.connect().await.unwrap(); },
-                None => { break; }
-            }
-        }
+    while let Ok(mut reg) = receiver.recv() {
+        reg.connect().unwrap();
+    }
 
         // we get here because sender got dropped
     //});
@@ -84,19 +79,7 @@ fn main () -> Result<(), String> {
 
     let args = args::BootstrapOptions::from_args();
 
-    // tokio 1.7
-    let brt = runtime::Builder::new_multi_thread()
-        .worker_threads(4)
-        .thread_name("parent")
-        .enable_all()
-        .build()
-        .unwrap();
-
-    let rt = Arc::new(brt);
-    let future = bootstrap(args);
-    // This will run the runtime and future on the current thread
-    rt.block_on(async { future.await.unwrap(); } );
-
+    bootstrap(args).unwrap();
     return Ok(());
 }
 

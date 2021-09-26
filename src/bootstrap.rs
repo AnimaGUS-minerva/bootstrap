@@ -20,17 +20,16 @@ use std::collections::VecDeque;
 use std::io::{self, stdout, Write};
 use std::net::SocketAddr;
 use std::net::IpAddr;
+use std::net::TcpStream;
+use std::sync::mpsc::{channel,Sender,Receiver};
 use dns_lookup::{lookup_host};
 use url::Url;
-use tokio::sync::mpsc::channel;
-use tokio::sync::mpsc::{Sender,Receiver};
-use tokio::net::TcpStream;
 
 use mbedtls::rng::OsEntropy;
 use mbedtls::rng::CtrDrbg;
 use mbedtls::ssl::config::{Endpoint, Preset, Transport};
 use mbedtls::ssl::{Config, Context};
-use mbedtls::x509::Certificate;
+//use mbedtls::x509::Certificate;
 use mbedtls::Result as TlsResult;
 
 #[derive(PartialEq, Debug)]
@@ -40,8 +39,8 @@ pub struct JoinProxyInfo {
 }
 
 impl JoinProxyInfo {
-    async fn connect_one(self: &mut Self,
-                   config: Config,
+    fn connect_one(self: &mut Self,
+                   mut config: Config,
                    addr:   SocketAddr,
                    entropy: Arc<OsEntropy>) -> TlsResult<()> {
         let rng       = Arc::new(CtrDrbg::new(entropy, None)?);
@@ -50,7 +49,7 @@ impl JoinProxyInfo {
         //config.set_ca_list(cert, None);
         let mut ctx = Context::new(Arc::new(config));
 
-        let conn = TcpStream::connect(addr).await.unwrap();
+        let conn = TcpStream::connect(addr).unwrap();
         ctx.establish(conn, None)?;
 
         let line = "GET /version.json HTTP/1.0\r\n";
@@ -59,20 +58,21 @@ impl JoinProxyInfo {
         Ok(())
     }
 
-    pub async fn connect(self: &mut Self) -> Result<(), std::io::Error> {
-        let mut config = Config::new(Endpoint::Client, Transport::Stream, Preset::Default);
+    pub fn connect(self: &mut Self) -> Result<(), std::io::Error> {
+        let config = Config::new(Endpoint::Client, Transport::Stream, Preset::Default);
 
         let entropy = Arc::new(OsEntropy::new());
 
         while let Some(addr) = self.addrs.pop_front() {
-            let tlserr = self.connect_one(config, addr, entropy).await;
+            let tlserr = self.connect_one(config, addr, entropy);
 
             // examine tlserr for ECONN refused and try next IP.
             match tlserr {
-                Err(x) => { return Err(std::io::Error::new(io::ErrorKind::Other, "TLS failed")) }
-                Ok(x)  => { return Ok(()) }
+                Err(_x) => { return Err(std::io::Error::new(io::ErrorKind::Other, "TLS failed")) }
+                Ok(_x)  => { return Ok(()) }
             }
         }
+        Ok(())
     }
 }
 
@@ -86,14 +86,18 @@ impl BootstrapState {
         BootstrapState { registrars: sender }
     }
     pub fn channel() -> (Sender<JoinProxyInfo>, Receiver<JoinProxyInfo>) {
-        channel::<JoinProxyInfo>(16)
+        channel::<JoinProxyInfo>()
     }
 
     pub fn addr2sockaddr(hosts: Vec<IpAddr>, port: u16) -> VecDeque<SocketAddr> {
-        VecDeque::from(hosts.map(|h| SocketAddr::new(h, port)))
+        let mut vq = VecDeque::new();
+        for h in hosts {
+            vq.push_back(SocketAddr::new(h, port))
+        }
+        vq
     }
 
-    pub async fn add_registrar_by_url(self: &mut Self, url: Url) -> Result<(), std::io::Error> {
+    pub fn add_registrar_by_url(self: &mut Self, url: Url) -> Result<(), std::io::Error> {
 
         let hostname = url.host_str().unwrap();
         let port     = url.port().unwrap();
@@ -101,11 +105,11 @@ impl BootstrapState {
         self.registrars.send(JoinProxyInfo {
             url:   url,
             addrs: BootstrapState::addr2sockaddr(hosts, port)
-        }).await.unwrap();
+        }).unwrap();
         Ok(())
     }
 
-    pub async fn add_registrar_by_ip(self: &mut Self, ip: std::net::IpAddr, port: u16) -> Result<(), std::io::Error> {
+    pub fn add_registrar_by_ip(self: &mut Self, ip: std::net::IpAddr, port: u16) -> Result<(), std::io::Error> {
 
         let mut url = Url::from_file_path("/.well-known/brski/request/voucher").unwrap();
         url.set_ip_host(ip).unwrap();
@@ -113,7 +117,7 @@ impl BootstrapState {
         self.registrars.send(JoinProxyInfo {
             url:   url,
             addrs: BootstrapState::addr2sockaddr(hosts, port)
-        }).await.unwrap();
+        }).unwrap();
         Ok(())
     }
 }
@@ -122,58 +126,41 @@ impl BootstrapState {
 pub mod tests {
     use super::*;
 
-    macro_rules! aw {
-        ($e:expr) => {
-            tokio_test::block_on($e)
-        };
-    }
-
-    async fn add_registrar_url() -> Result<(), std::io::Error> {
+    #[test]
+    fn add_registrar_url() -> Result<(), std::io::Error> {
         let url = Url::parse("https://example.com/.well-known/brski/requestvoucher").unwrap();
 
-        let (sender, mut receiver) = BootstrapState::channel();
+        let (sender, receiver) = BootstrapState::channel();
 
         let mut state = BootstrapState::empty(sender);
-        state.add_registrar_by_url(url).await?;
+        state.add_registrar_by_url(url)?;
 
-        let thing = receiver.recv().await;
-        assert_ne!(thing, None);
+        let _thing = receiver.recv().unwrap();
         Ok(())
     }
-    #[test]
-    fn test_add_registrar_url() {
-        aw!(add_registrar_url()).unwrap();
-    }
 
-    async fn add_registrar_ip() -> Result<(), std::io::Error> {
-        let (sender, mut receiver) = BootstrapState::channel();
+    #[test]
+    fn add_registrar_ip() -> Result<(), std::io::Error> {
+        let (sender, receiver) = BootstrapState::channel();
         let mut state = BootstrapState::empty(sender);
 
         let ipaddr = "fe80::1234".parse().unwrap();
-        state.add_registrar_by_ip(ipaddr, 8443).await?;
+        state.add_registrar_by_ip(ipaddr, 8443)?;
 
-        let thing = receiver.recv().await;
-        assert_ne!(thing, None);
+        let _thing = receiver.recv().unwrap();
         Ok(())
     }
-    #[test]
-    fn test_add_registrar_ip() {
-        aw!(add_registrar_ip()).unwrap();
-    }
 
-    async fn add_bad_registrar_url() {
+    #[test]
+    fn add_bad_registrar_url() {
         let (sender, _receiver) = BootstrapState::channel();
 
         let url = Url::parse("https://foobar.example/.well-known/brski/requestvoucher").unwrap();
 
         let mut state = BootstrapState::empty(sender);
 
-        let ekind = state.add_registrar_by_url(url).await.map_err(|e| e.kind());
+        let ekind = state.add_registrar_by_url(url).map_err(|e| e.kind());
         assert_eq!(Err(std::io::ErrorKind::Other), ekind);
-    }
-    #[test]
-    fn test_add_bad_registrar_url() {
-        aw!(add_bad_registrar_url());
     }
 
 }
