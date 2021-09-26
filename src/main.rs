@@ -64,7 +64,7 @@ async fn bootstrap(args: args::BootstrapOptions) -> Result<(), String> {
         loop {
             let regopt = receiver.recv().await;
             match regopt {
-                Some(mut reg) => { reg.connect() },
+                Some(mut reg) => { reg.connect().await.unwrap(); },
                 None => { break; }
             }
         }

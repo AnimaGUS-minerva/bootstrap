@@ -15,21 +15,64 @@
  *
  */
 //use dns_lookup::{AddrInfo, AddrInfoHints, lookup_host, getaddrinfo, SockType};
+use std::sync::Arc;
+use std::collections::VecDeque;
+use std::io::{self, stdout, Write};
+use std::net::SocketAddr;
+use std::net::IpAddr;
 use dns_lookup::{lookup_host};
 use url::Url;
-//use std::collections::VecDeque;
 use tokio::sync::mpsc::channel;
 use tokio::sync::mpsc::{Sender,Receiver};
+use tokio::net::TcpStream;
+
+use mbedtls::rng::OsEntropy;
+use mbedtls::rng::CtrDrbg;
+use mbedtls::ssl::config::{Endpoint, Preset, Transport};
+use mbedtls::ssl::{Config, Context};
+use mbedtls::x509::Certificate;
+use mbedtls::Result as TlsResult;
 
 #[derive(PartialEq, Debug)]
 pub struct JoinProxyInfo {
     url:  Url,
-    addrs: Vec<std::net::IpAddr>
+    addrs: VecDeque<SocketAddr>
 }
 
 impl JoinProxyInfo {
-    pub fn connect(self: &mut Self) {
-        println!("hello");
+    async fn connect_one(self: &mut Self,
+                   config: Config,
+                   addr:   SocketAddr,
+                   entropy: Arc<OsEntropy>) -> TlsResult<()> {
+        let rng       = Arc::new(CtrDrbg::new(entropy, None)?);
+        //let cert    = Arc::new(Certificate::from_pem_multiple(keys::PEM_CERT.as_bytes())?);
+        config.set_rng(rng);
+        //config.set_ca_list(cert, None);
+        let mut ctx = Context::new(Arc::new(config));
+
+        let conn = TcpStream::connect(addr).await.unwrap();
+        ctx.establish(conn, None)?;
+
+        let line = "GET /version.json HTTP/1.0\r\n";
+        ctx.write_all(line.as_bytes()).unwrap();
+        io::copy(&mut ctx, &mut stdout()).unwrap();
+        Ok(())
+    }
+
+    pub async fn connect(self: &mut Self) -> Result<(), std::io::Error> {
+        let mut config = Config::new(Endpoint::Client, Transport::Stream, Preset::Default);
+
+        let entropy = Arc::new(OsEntropy::new());
+
+        while let Some(addr) = self.addrs.pop_front() {
+            let tlserr = self.connect_one(config, addr, entropy).await;
+
+            // examine tlserr for ECONN refused and try next IP.
+            match tlserr {
+                Err(x) => { return Err(std::io::Error::new(io::ErrorKind::Other, "TLS failed")) }
+                Ok(x)  => { return Ok(()) }
+            }
+        }
     }
 }
 
@@ -46,25 +89,30 @@ impl BootstrapState {
         channel::<JoinProxyInfo>(16)
     }
 
+    pub fn addr2sockaddr(hosts: Vec<IpAddr>, port: u16) -> VecDeque<SocketAddr> {
+        VecDeque::from(hosts.map(|h| SocketAddr::new(h, port)))
+    }
+
     pub async fn add_registrar_by_url(self: &mut Self, url: Url) -> Result<(), std::io::Error> {
 
         let hostname = url.host_str().unwrap();
+        let port     = url.port().unwrap();
         let hosts = lookup_host(hostname)?;
         self.registrars.send(JoinProxyInfo {
             url:   url,
-            addrs: hosts
+            addrs: BootstrapState::addr2sockaddr(hosts, port)
         }).await.unwrap();
         Ok(())
     }
 
-    pub async fn add_registrar_by_ip(self: &mut Self, ip: std::net::IpAddr) -> Result<(), std::io::Error> {
+    pub async fn add_registrar_by_ip(self: &mut Self, ip: std::net::IpAddr, port: u16) -> Result<(), std::io::Error> {
 
         let mut url = Url::from_file_path("/.well-known/brski/request/voucher").unwrap();
         url.set_ip_host(ip).unwrap();
         let hosts = vec![ip];
         self.registrars.send(JoinProxyInfo {
             url:   url,
-            addrs: hosts
+            addrs: BootstrapState::addr2sockaddr(hosts, port)
         }).await.unwrap();
         Ok(())
     }
@@ -102,7 +150,7 @@ pub mod tests {
         let mut state = BootstrapState::empty(sender);
 
         let ipaddr = "fe80::1234".parse().unwrap();
-        state.add_registrar_by_ip(ipaddr).await?;
+        state.add_registrar_by_ip(ipaddr, 8443).await?;
 
         let thing = receiver.recv().await;
         assert_ne!(thing, None);
