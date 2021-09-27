@@ -102,7 +102,16 @@ impl BootstrapState {
     pub fn add_registrar_by_url(self: &mut Self, url: Url) -> Result<(), std::io::Error> {
 
         let hostname = url.host_str().unwrap();
-        let port     = url.port().unwrap();
+        let maybeport= url.port();
+        let defport = match url.scheme() {
+            "https" => 443,
+            "coaps" => 5684,
+            _ => { return Err ( std::io::Error::from(std::io::ErrorKind::Other)) }
+        };
+        let port = match maybeport {
+            None => { defport },
+            Some(x) => x
+        };
         let hosts = lookup_host(hostname)?;
         self.registrars.send(JoinProxyInfo {
             url:   url,
