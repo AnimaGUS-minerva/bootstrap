@@ -16,7 +16,7 @@
  */
 //use std::sync::Arc;
 use structopt::StructOpt;
-use psa_crypto;
+//use psa_crypto;
 
 pub mod args;
 pub mod bootstrap;
@@ -48,7 +48,7 @@ fn bootstrap(args: args::BootstrapOptions) -> Result<(), String> {
     let (sender, receiver) = BootstrapState::channel();
     let mut state = BootstrapState::empty(sender);
 
-    psa_crypto::init().unwrap();
+    //psa_crypto::init().unwrap();
 
     if let Some(url) = args.registrar {
         state.add_registrar_by_url(url.clone()).unwrap();
