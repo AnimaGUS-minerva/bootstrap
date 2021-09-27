@@ -21,24 +21,24 @@ use url::Url;
 #[derive(StructOpt, PartialEq, Debug)]
 // Hermes Bootstrap  manager
 pub struct BootstrapOptions {
-    // turn on debugging from Grasp DULL
+    /// turn on debugging of processing
     #[structopt(default_value = "false", long, parse(try_from_str))]
     pub debug_bootstrap: bool,
 
-    // override search and just connect to Registrar URI provided
-    #[structopt(parse(try_from_str = Url::parse))]
+    /// override search and just connect to Registrar URI provided
+    #[structopt(long, parse(try_from_str = Url::parse))]
     pub registrar: Option<Url>,
 
-    // where to find the IDevID certificate
-    #[structopt(parse(from_os_str))]
+    /// where to find the IDevID certificate
+    #[structopt(long, parse(from_os_str))]
     pub idevid_cert: Option<PathBuf>,
 
-    // where to find the IDevID private key
-    #[structopt(parse(from_os_str))]
+    /// where to find the IDevID private key
+    #[structopt(long, parse(from_os_str))]
     pub idevid_priv: Option<PathBuf>,
 
     /// Output dir for LDevID
-    #[structopt(parse(from_os_str))]
+    #[structopt(long, parse(from_os_str))]
     pub ldevid_cert: Option<PathBuf>,
 }
 
