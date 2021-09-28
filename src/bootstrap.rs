@@ -29,7 +29,7 @@ use url::Url;
 
 use mbedtls::rng::OsEntropy;
 use mbedtls::rng::CtrDrbg;
-use mbedtls::ssl::config::{Endpoint, Preset, Transport};
+use mbedtls::ssl::config::{Endpoint, Preset, Transport, AuthMode};
 use mbedtls::ssl::{Config, Context};
 //use mbedtls::x509::Certificate;
 use mbedtls::Result as TlsResult;
@@ -45,19 +45,34 @@ impl JoinProxyInfo {
                    mut config: Config,
                    addr:   SocketAddr,
                    entropy: Arc<OsEntropy>) -> TlsResult<()> {
+
+        let buf = [u8; 256];
+
         let rng       = Arc::new(CtrDrbg::new(entropy, None)?);
+        println!("rng made");
         //let cert    = Arc::new(Certificate::from_pem_multiple(keys::PEM_CERT.as_bytes())?);
         config.set_rng(rng);
         //config.set_ca_list(cert, None);
+        config.set_authmode( AuthMode::None );
         let mut ctx = Context::new(Arc::new(config));
+        println!("ctx made. connecting to {:?}", addr);
 
         let conn = TcpStream::connect(addr).unwrap();
         ctx.establish(conn, None)?;
+        println!("ctx establish");
 
-        let line = "GET /version.json HTTP/1.0\r\n";
+        let line = "GET /version.json HTTP/1.0\r\n\r\n";
         ctx.write_all(line.as_bytes()).unwrap();
-        io::copy(&mut ctx, &mut stdout()).unwrap();
-        Ok(())
+        match io::copy(&mut ctx, &mut stdout()) {
+            Ok(x) => {
+                println!("io-copy returned: {:?}", x);
+                return Ok(());
+            },
+            Err(x) => {
+                println!("io-copy errored: {:?}", x);
+                return Ok(());
+            }
+        }
     }
 
     pub fn connect(self: &mut Self) -> Result<(), std::io::Error> {

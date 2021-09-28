@@ -78,6 +78,7 @@ fn main () -> Result<(), String> {
     println!("Hermes Bootstrap {}", VERSION);
 
     let args = args::BootstrapOptions::from_args();
+    println!("Options {:?}", args);
 
     bootstrap(args).unwrap();
     return Ok(());
