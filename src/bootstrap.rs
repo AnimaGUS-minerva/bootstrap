@@ -17,7 +17,8 @@
 //use dns_lookup::{AddrInfo, AddrInfoHints, lookup_host, getaddrinfo, SockType};
 use std::sync::Arc;
 use std::collections::VecDeque;
-use std::io::{self, stdout, Write};
+use std::io::{self, Write, Read};
+use std::str;
 use std::net::SocketAddr;
 use std::net::IpAddr;
 use std::net::TcpStream;
@@ -46,7 +47,7 @@ impl JoinProxyInfo {
                    addr:   SocketAddr,
                    entropy: Arc<OsEntropy>) -> TlsResult<()> {
 
-        let buf = [u8; 256];
+        let mut buf = [0u8; 256];
 
         let rng       = Arc::new(CtrDrbg::new(entropy, None)?);
         println!("rng made");
@@ -63,16 +64,16 @@ impl JoinProxyInfo {
 
         let line = "GET /version.json HTTP/1.0\r\n\r\n";
         ctx.write_all(line.as_bytes()).unwrap();
-        match io::copy(&mut ctx, &mut stdout()) {
-            Ok(x) => {
-                println!("io-copy returned: {:?}", x);
-                return Ok(());
-            },
-            Err(x) => {
-                println!("io-copy errored: {:?}", x);
-                return Ok(());
-            }
+        while let Ok(count) = ctx.read(&mut buf[..]) {
+            if count == 0 { break; }
+            let s = match str::from_utf8(&buf[0..(count)]) {
+                Ok(v) => v,
+                Err(e) => panic!("Invalid UTF-8 sequence: {}", e),
+            };
+            println!("{} {}", count, s);
         }
+        println!("closed");
+        Ok(())
     }
 
     pub fn connect(self: &mut Self) -> Result<(), std::io::Error> {
