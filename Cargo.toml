@@ -7,9 +7,9 @@ edition = "2021"
 structopt  = "0.3"
 url        = "*"
 mbedtls    = { version = "0.8.1" }
-# mbedtls-sys-auto = "*"
-# psa-crypto = "0.9.0"
 dns-lookup = "1.0.8"
+ureq       = { version = "2.2.0", default-features = false, features = [], path="/ssw/projects/pandora/UPSTREAM/ureq" }
+http       = "*"
 
 [dev-dependencies]
 

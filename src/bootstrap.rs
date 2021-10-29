@@ -17,8 +17,9 @@
 //use dns_lookup::{AddrInfo, AddrInfoHints, lookup_host, getaddrinfo, SockType};
 use std::sync::Arc;
 use std::collections::VecDeque;
-use std::io::{self, Write, Read};
-use std::str;
+//use std::io::{self, Write, Read};
+use std::io::{self};
+//use std::str;
 use std::net::SocketAddr;
 use std::net::IpAddr;
 use std::net::TcpStream;
@@ -34,6 +35,10 @@ use mbedtls::ssl::config::{Endpoint, Preset, Transport, AuthMode};
 use mbedtls::ssl::{Config, Context};
 //use mbedtls::x509::Certificate;
 use mbedtls::Result as TlsResult;
+
+use attohttpc::RequestBuilder;
+
+use http::Method;
 
 #[derive(PartialEq, Debug)]
 pub struct JoinProxyInfo {
@@ -52,26 +57,22 @@ impl JoinProxyInfo {
         let rng       = Arc::new(CtrDrbg::new(entropy, None)?);
         println!("rng made");
         //let cert    = Arc::new(Certificate::from_pem_multiple(keys::PEM_CERT.as_bytes())?);
-        config.set_rng(rng);
         //config.set_ca_list(cert, None);
+        config.set_rng(rng);
         config.set_authmode( AuthMode::None );
         let mut ctx = Context::new(Arc::new(config));
-        println!("ctx made. connecting to {:?}", addr);
 
         let conn = TcpStream::connect(addr).unwrap();
         ctx.establish(conn, None)?;
-        println!("ctx establish");
 
-        let line = "GET /version.json HTTP/1.0\r\n\r\n";
-        ctx.write_all(line.as_bytes()).unwrap();
-        while let Ok(count) = ctx.read(&mut buf[..]) {
-            if count == 0 { break; }
-            let s = match str::from_utf8(&buf[0..(count)]) {
-                Ok(v) => v,
-                Err(e) => panic!("Invalid UTF-8 sequence: {}", e),
-            };
-            println!("{} {}", count, s);
-        }
+        let req = RequestBuilder::new(Method::GET, "/version.json");
+        req.follow_redirects(false);
+
+        req.prepare().write_request(ctx, &req.url, None);
+        let resp = parse_response(ctx, req)?;
+
+        println!("status code {}", resp.status().as_u16());
+        println!("response {:?}", resp);
         println!("closed");
         Ok(())
     }
