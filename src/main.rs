@@ -20,6 +20,7 @@ use structopt::StructOpt;
 
 pub mod args;
 pub mod bootstrap;
+pub mod mbedtls_connector;
 use bootstrap::BootstrapState;
 
 static VERSION: &str = "0.9.0";
@@ -48,7 +49,7 @@ fn bootstrap(args: args::BootstrapOptions) -> Result<(), String> {
     let (sender, receiver) = BootstrapState::channel();
     let mut state = BootstrapState::empty(sender);
 
-    //psa_crypto::init().unwrap();
+    //init_psa_crypto();
 
     if let Some(url) = args.registrar {
         state.add_registrar_by_url(url.clone()).unwrap();

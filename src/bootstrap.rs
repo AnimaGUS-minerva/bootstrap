@@ -14,29 +14,33 @@
    limitations under the License.
  *
  */
+
+#![allow(dead_code, unused_imports)]
+
 //use dns_lookup::{AddrInfo, AddrInfoHints, lookup_host, getaddrinfo, SockType};
 use std::sync::Arc;
 use std::collections::VecDeque;
 //use std::io::{self, Write, Read};
 use std::io::{self};
 //use std::str;
+use std::time::Duration;
 use std::net::SocketAddr;
 use std::net::IpAddr;
 use std::net::TcpStream;
 use std::sync::mpsc::{channel,Sender,Receiver};
 use dns_lookup::{lookup_host};
 use url::Url;
+use crate::mbedtls_connector;
 
 
-
-use mbedtls::rng::OsEntropy;
-use mbedtls::rng::CtrDrbg;
-use mbedtls::ssl::config::{Endpoint, Preset, Transport, AuthMode};
+//use mbedtls::rng::OsEntropy;
+//use mbedtls::rng::CtrDrbg;
+//use mbedtls::ssl::config::{Endpoint, Preset, Transport, AuthMode};
 use mbedtls::ssl::{Config, Context};
 //use mbedtls::x509::Certificate;
-use mbedtls::Result as TlsResult;
+//use mbedtls::Result as TlsResult;
 
-use attohttpc::RequestBuilder;
+//use ureq::minerva;
 
 use http::Method;
 
@@ -46,44 +50,46 @@ pub struct JoinProxyInfo {
     addrs: VecDeque<SocketAddr>
 }
 
+
+
 impl JoinProxyInfo {
     fn connect_one(self: &mut Self,
-                   mut config: Config,
-                   addr:   SocketAddr,
-                   entropy: Arc<OsEntropy>) -> TlsResult<()> {
+                   addr:   SocketAddr) -> Result<(), std::io::Error> {
 
         let mut buf = [0u8; 256];
+        let connector = Arc::new(mbedtls_connector::MbedTlsConnector::new(mbedtls::ssl::config::AuthMode::None));
 
-        let rng       = Arc::new(CtrDrbg::new(entropy, None)?);
-        println!("rng made");
-        //let cert    = Arc::new(Certificate::from_pem_multiple(keys::PEM_CERT.as_bytes())?);
-        //config.set_ca_list(cert, None);
-        config.set_rng(rng);
-        config.set_authmode( AuthMode::None );
-        let mut ctx = Context::new(Arc::new(config));
+        let agent = ureq::builder()
+            .tls_connector(connector.clone())
+            .timeout_connect(Duration::from_secs(5))
+            .timeout(Duration::from_secs(20))
+            .build();
 
+        /* establish the connection */
         let conn = TcpStream::connect(addr).unwrap();
-        ctx.establish(conn, None)?;
 
-        let req = RequestBuilder::new(Method::GET, "/version.json");
-        req.follow_redirects(false);
+        /* do the TLS bits */
+        let stream = minerva::brski_connect(conn, agent).unwrap();
 
-        req.prepare().write_request(ctx, &req.url, None);
-        let resp = parse_response(ctx, req)?;
+        /* now pull the certificate out of the stream */
+        let certificate = stream.get_peer_certificate().unwrap();
 
-        println!("status code {}", resp.status().as_u16());
-        println!("response {:?}", resp);
+        /* print it */
+
+        /* now send a request */
+        //brski_request(stream).
+        //let resp = parse_response(agent, req)?;
+
+        //println!("status code {}", resp.status().as_u16());
+        //println!("response {:?}", resp);
         println!("closed");
         Ok(())
     }
 
     pub fn connect(self: &mut Self) -> Result<(), std::io::Error> {
-        let config = Config::new(Endpoint::Client, Transport::Stream, Preset::Default);
-
-        let entropy = Arc::new(OsEntropy::new());
 
         while let Some(addr) = self.addrs.pop_front() {
-            let tlserr = self.connect_one(config, addr, entropy);
+            let tlserr = self.connect_one(addr);
 
             // examine tlserr for ECONN refused and try next IP.
             match tlserr {
