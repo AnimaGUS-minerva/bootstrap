@@ -16,7 +16,7 @@ fn entropy_new() -> mbedtls::rng::OsEntropy {
 }
 
 pub struct MbedTlsConnector {
-    context: Arc<Mutex<Context<Box<dyn ReadWrite>>>>,
+    pub context: Arc<Mutex<Context<Box<dyn ReadWrite>>>>,
 }
 
 #[derive(Debug)]
@@ -62,7 +62,7 @@ impl TlsConnector for MbedTlsConnector {
     ) -> Result<Box<dyn ReadWrite>, Error> {
         let mut ctx = self.context.lock().unwrap();
         match ctx.establish(io, None) {
-            Err(e) => {
+            Err(_e) => {
                 let io_err = io::Error::new(io::ErrorKind::InvalidData, MbedTlsError);
                 return Err(io_err.into());
             }
@@ -108,6 +108,11 @@ impl MbedTlsStream {
             context: mtc.context.clone(),
         })
     }
+
+    //    pub fn get_peer_certificate(&self) -> Result<(), Error> {
+    //        Ok(())
+    //    }
+
 }
 
 impl ReadWrite for MbedTlsStream {

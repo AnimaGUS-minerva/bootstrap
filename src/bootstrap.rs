@@ -17,21 +17,23 @@
 
 #![allow(dead_code, unused_imports)]
 
-//use dns_lookup::{AddrInfo, AddrInfoHints, lookup_host, getaddrinfo, SockType};
+use std::net::{SocketAddr};
+use std::net::IpAddr;
+use std::net::TcpStream;
 use std::sync::Arc;
+use std::time::Duration;
+use ureq::{Error, ErrorKind, TlsConnector};
+
+//use dns_lookup::{AddrInfo, AddrInfoHints, lookup_host, getaddrinfo, SockType};
 use std::collections::VecDeque;
 //use std::io::{self, Write, Read};
 use std::io::{self};
 //use std::str;
-use std::time::Duration;
-use std::net::SocketAddr;
-use std::net::IpAddr;
-use std::net::TcpStream;
 use std::sync::mpsc::{channel,Sender,Receiver};
 use dns_lookup::{lookup_host};
 use url::Url;
+use http::uri::{Builder, Authority};
 use crate::mbedtls_connector;
-
 
 //use mbedtls::rng::OsEntropy;
 //use mbedtls::rng::CtrDrbg;
@@ -54,10 +56,20 @@ pub struct JoinProxyInfo {
 
 impl JoinProxyInfo {
     fn connect_one(self: &mut Self,
-                   addr:   SocketAddr) -> Result<(), std::io::Error> {
+                   addr:   SocketAddr) -> Result<(), ureq::Error> {
 
-        let mut buf = [0u8; 256];
+        let mut _buf = [0u8; 256];
         let connector = Arc::new(mbedtls_connector::MbedTlsConnector::new(mbedtls::ssl::config::AuthMode::None));
+
+        let hostname = addr.ip().to_string();
+        let authority = Authority::from_sockaddr(addr).unwrap();
+        println!("using hostname: {:?}", authority.to_string());
+        let uri = Builder::new()
+            .scheme("https")
+            .authority(authority)
+            .path_and_query("/.well-known/brski/requestvoucher")
+            .build()
+            .unwrap();
 
         let agent = ureq::builder()
             .tls_connector(connector.clone())
@@ -69,10 +81,37 @@ impl JoinProxyInfo {
         let conn = TcpStream::connect(addr).unwrap();
 
         /* do the TLS bits */
-        let stream = minerva::brski_connect(conn, agent).unwrap();
+        let connbox = Box::new(conn);
+        let _https_stream = connector.connect(&hostname, connbox)?;
+        let _request = agent.request(&"POST".to_string(), &uri.to_string());
 
         /* now pull the certificate out of the stream */
-        let certificate = stream.get_peer_certificate().unwrap();
+        //let certificate = https_stream.get_peer_certificate().unwrap();
+        { //--------
+            let mbedtls_context    = connector.context.lock().unwrap();
+            let certificate_list   = mbedtls_context.peer_cert().unwrap();
+            //let mut num = 0;
+            let mut cert1: Option<mbedtls::alloc::Box<mbedtls::x509::Certificate>> = None;
+
+            if let Some(certificates) = certificate_list {
+                // only use first certificate returned
+                for cert in certificates {
+                    match cert1 {
+                        None => { cert1 = Some(cert.clone()) },
+                        _ => {}
+                    }
+                    //println!("[{}] cert: {:?}", num, cert.clone());
+                    //num = num + 1;
+                }
+            } else {
+                return Err(ureq::ErrorKind::msg(ErrorKind::InvalidUrl,
+                                                format!("no certificate found")));
+            }
+
+            // now we have the peer certificate copied into cert1.
+            println!("cert1: {:?}", cert1);
+        }
+
 
         /* print it */
 
@@ -89,6 +128,7 @@ impl JoinProxyInfo {
     pub fn connect(self: &mut Self) -> Result<(), std::io::Error> {
 
         while let Some(addr) = self.addrs.pop_front() {
+            println!("found address: {:?}", addr.to_string());
             let tlserr = self.connect_one(addr);
 
             // examine tlserr for ECONN refused and try next IP.

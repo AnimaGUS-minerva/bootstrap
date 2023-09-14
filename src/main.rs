@@ -61,6 +61,7 @@ fn bootstrap(args: args::BootstrapOptions) -> Result<(), String> {
     // now make loop that looks for new Registrars to process.
     // when Bootstrap.registrar is empty, then wait for signal
     //rt.spawn(async move {   // receiver moved
+    println!("Looking for Registrars using GRASP");
     while let Ok(mut reg) = receiver.recv() {
         reg.connect().unwrap();
     }

@@ -38,28 +38,6 @@ static KEY_PEM_F2_00_02: &[u8] = &[0u8]; // dummy
 
 use std::io::{self, Cursor, Write};
 
-pub fn brski_connect(
-    connector: Arc<MbedTlsConnector>,
-    agent:  Agent,
-    sock:   TcpStream,
-) -> Result<Request, Error> {
-
-    //let tls_conf = &agent.config.tls_config;
-    //let tls_stream = tls_conf.connect("", sock)?;
-
-    // or can we use connect??
-    let mbedtls_stream = wrap_stream_with_connector(&connector,
-                                                    sock).unwrap();
-
-    //let https_stream = Stream::new(tls_stream);
-    let body = Payload::Text("Hello", "utf-8".to_string());
-
-    let _unit = Unit::new(&agent,
-                         &"POST".to_string(),
-                         &Url::parse("https://localhost/.well-known/brski/requestvoucher").unwrap(),
-                         vec![Header::new("User-Agent", "Minerva Bootstrap")], /* headers */
-                         &body.into_read(),
-                          None);
 #[cfg(feature = "mbedtls")]
 { //--------
     let mbedtls_context    = mbedtls_stream.context.lock().unwrap();
@@ -84,7 +62,10 @@ pub fn brski_connect(
 
     // now we have the peer certificate copied into cert1.
     println!("cert1: {:?}", cert1);
-} //--------
+}
+
+#[cfg(feature = "mbedtls")]
+{ //--------
     let mut vrq = Voucher::new_vrq();
 
     vrq.set(Attr::Assertion(Assertion::Proximity))
