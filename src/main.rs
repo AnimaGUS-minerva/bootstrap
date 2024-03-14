@@ -21,6 +21,9 @@ use structopt::StructOpt;
 pub mod args;
 pub mod bootstrap;
 pub mod mbedtls_connector;
+mod support_rand;
+mod custom_voucher;
+mod utils;
 use bootstrap::BootstrapState;
 
 static VERSION: &str = "0.9.0";

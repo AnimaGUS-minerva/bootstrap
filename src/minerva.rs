@@ -27,74 +27,11 @@ use crate::error::{Error, ErrorKind};
 #[cfg(feature = "mbedtls")]
 use crate::mbedtls as self_mbedtls;
 
-//use crate::custom_voucher::{CustomVoucher as Voucher};
-use minerva_voucher::{attr::*, SignatureAlgorithm, Sign};
-
 use std::convert::TryFrom;
 
 //static KEY_PEM_F2_00_02: &[u8] = core::include_bytes!(
 //    concat!(env!("CARGO_MANIFEST_DIR"), "/data/00-D0-E5-F2-00-02/key.pem"));
-static KEY_PEM_F2_00_02: &[u8] = &[0u8]; // dummy
 
 use std::io::{self, Cursor, Write};
 
-#[cfg(feature = "mbedtls")]
-{ //--------
-    let mbedtls_context    = mbedtls_stream.context.lock().unwrap();
-    let certificate_list   = mbedtls_context.peer_cert().unwrap();
-    //let mut num = 0;
-    let mut cert1: Option<mbedtls::alloc::Box<mbedtls::x509::Certificate>> = None;
-
-    if let Some(certificates) = certificate_list {
-        // only use first certificate returned
-        for cert in certificates {
-            match cert1 {
-                None => { cert1 = Some(cert.clone()) },
-                _ => {}
-            }
-            //println!("[{}] cert: {:?}", num, cert.clone());
-            //num = num + 1;
-        }
-    } else {
-        return Err(ErrorKind::InvalidUrl
-                   .msg(format!("no certificate found")));
-    }
-
-    // now we have the peer certificate copied into cert1.
-    println!("cert1: {:?}", cert1);
-}
-
-#[cfg(feature = "mbedtls")]
-{ //--------
-    let mut vrq = Voucher::new_vrq();
-
-    vrq.set(Attr::Assertion(Assertion::Proximity))
-        .set(Attr::CreatedOn(1599086034))
-        .set(Attr::SerialNumber(b"00-D0-E5-F2-00-02".to_vec()));
-
-    // This is required when the `Sign` trait is backed by mbedtls v3.
-    #[cfg(feature = "minerva-mbedtls")]
-    init_psa_crypto();
-
-    vrq.sign(KEY_PEM_F2_00_02, SignatureAlgorithm::ES256);
-
-    let _cbor = vrq.serialize().unwrap();
-
-    Err(ErrorKind::InvalidUrl
-                .msg(format!("code incomplete")))
-}
-
-//pub fn brski_request(
-//    _stream: Stream,
-//) -> Result<Request, Error> {
-//
-//    Err(ErrorKind::InvalidUrl.msg("request incomplete"))
-//}
-
 #[cfg(feature = "minerva-mbedtls")]
-pub fn init_psa_crypto() {
-    use minerva_mbedtls::psa_crypto;
-
-    psa_crypto::init().unwrap();
-    psa_crypto::initialized().unwrap();
-}

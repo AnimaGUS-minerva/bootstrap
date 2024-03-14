@@ -35,7 +35,10 @@ use url::Url;
 use http::uri::{Builder, Authority};
 use crate::mbedtls_connector;
 
-//use mbedtls::rng::OsEntropy;
+use crate::custom_voucher::{CustomVoucher as Voucher};
+use minerva_voucher::{attr::*, SignatureAlgorithm, Sign};
+
+use mbedtls::rng::OsEntropy;
 //use mbedtls::rng::CtrDrbg;
 //use mbedtls::ssl::config::{Endpoint, Preset, Transport, AuthMode};
 use mbedtls::ssl::{Config, Context};
@@ -43,6 +46,7 @@ use mbedtls::ssl::{Config, Context};
 //use mbedtls::Result as TlsResult;
 
 //use ureq::minerva;
+static KEY_PEM_F2_00_02: &[u8] = &[0u8]; // dummy
 
 use http::Method;
 
@@ -52,7 +56,12 @@ pub struct JoinProxyInfo {
     addrs: VecDeque<SocketAddr>
 }
 
+pub fn init_psa_crypto() {
+    use minerva_mbedtls::psa_crypto;
 
+    psa_crypto::init().unwrap();
+    psa_crypto::initialized().unwrap();
+}
 
 impl JoinProxyInfo {
     fn connect_one(self: &mut Self,
@@ -87,7 +96,7 @@ impl JoinProxyInfo {
 
         /* now pull the certificate out of the stream */
         //let certificate = https_stream.get_peer_certificate().unwrap();
-        { //--------
+        let cert = {
             let mbedtls_context    = connector.context.lock().unwrap();
             let certificate_list   = mbedtls_context.peer_cert().unwrap();
             //let mut num = 0;
@@ -110,8 +119,27 @@ impl JoinProxyInfo {
 
             // now we have the peer certificate copied into cert1.
             println!("cert1: {:?}", cert1);
-        }
 
+            cert1
+        };
+
+        { //--------
+            let mut vrq = Voucher::new_vrq();
+
+            vrq.set(Attr::Assertion(Assertion::Proximity))
+                .set(Attr::CreatedOn(1599086034))
+                .set(Attr::SerialNumber(b"00-D0-E5-F2-00-02".to_vec()));
+
+            // This is required when the `Sign` trait is backed by mbedtls v3.
+            init_psa_crypto();
+
+            vrq.sign(KEY_PEM_F2_00_02, SignatureAlgorithm::ES256);
+
+            let _cbor = vrq.serialize().unwrap();
+
+            return Err(ureq::ErrorKind::msg(ErrorKind::InvalidUrl,
+                                            format!("code incomplete")));
+        }
 
         /* print it */
 
@@ -121,8 +149,8 @@ impl JoinProxyInfo {
 
         //println!("status code {}", resp.status().as_u16());
         //println!("response {:?}", resp);
-        println!("closed");
-        Ok(())
+        //println!("closed");
+        //Ok(())
     }
 
     pub fn connect(self: &mut Self) -> Result<(), std::io::Error> {
