@@ -3,6 +3,8 @@ pub use minerva_voucher::{VoucherError, Sign, Validate, SignatureAlgorithm, attr
 use super::utils;
 use std::convert::TryFrom;
 
+//
+
 pub struct CustomVoucher(Voucher);
 
 impl core::ops::Deref for CustomVoucher {
@@ -38,6 +40,9 @@ use mbedtls::pk::{EcGroup, EcGroupId, Pk, ECDSA_MAX_LEN};
 use mbedtls::ecp::EcPoint;
 use mbedtls::x509::certificate::Certificate;
 use mbedtls::hash as mbedtls_hash;
+use super::support_rand::test_rng;
+
+//
 
 impl Sign for CustomVoucher {
     fn sign(&mut self, privkey_pem: &[u8], alg: SignatureAlgorithm) -> Result<&mut Self, VoucherError> {
@@ -50,7 +55,6 @@ impl Sign for CustomVoucher {
 }
 
 fn sign_with_rust_mbedtls(
-    mut rng: mbedtls::rng::OsEntropy,
     privkey_pem: &[u8],
     alg: SignatureAlgorithm,
     (sig_out, sig_struct): (&mut Vec<u8>, &[u8])
@@ -58,7 +62,7 @@ fn sign_with_rust_mbedtls(
     let (ref hash, md_ty) = compute_digest(sig_struct, &alg)?;
     let mut sig = vec![0u8; ECDSA_MAX_LEN];
     let sig_len = Pk::from_private_key(&utils::null_terminate_bytes!(privkey_pem), None)?
-        .sign_deterministic(md_ty, &hash, &mut sig, &mut rng)?;
+        .sign_deterministic(md_ty, &hash, &mut sig, &mut test_rng())?;
     sig.truncate(sig_len);
 
     *sig_out = sig;
