@@ -143,7 +143,7 @@ impl JoinProxyInfo {
 
         /* now pull the certificate out of the stream */
         //let certificate = https_stream.get_peer_certificate().unwrap();
-        let cert = {
+        let _cert = {
             let mbedtls_context    = connector.context.lock().unwrap();
             let certificate_list   = mbedtls_context.peer_cert().unwrap();
             //let mut num = 0;
