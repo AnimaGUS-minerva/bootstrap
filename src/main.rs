@@ -27,7 +27,7 @@ mod utils;
 use bootstrap::BootstrapState;
 
 static VERSION: &str = "0.9.0";
-static DEFAULT_JOIN_THREADS: u16 = 16;
+//static DEFAULT_JOIN_THREADS: u16 = 16;
 
 /*
  * Bootstrap is a program in a few distinct states.
