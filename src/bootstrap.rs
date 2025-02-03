@@ -20,6 +20,7 @@
 use std::net::{SocketAddr};
 use std::net::IpAddr;
 use std::net::TcpStream;
+use std::fmt;
 use std::sync::Arc;
 use std::time::Duration;
 use ureq::{Error, ErrorKind, TlsConnector};
@@ -63,9 +64,55 @@ pub fn init_psa_crypto() {
     psa_crypto::initialized().unwrap();
 }
 
+// Custom error for JoinProxyInfo.
+pub enum JoinProxyInfoError {
+    NoCertificateFound,
+    UreqError(ureq::Error),
+    NotImplementedYet
+}
+
+// Implement std::fmt::Display for AppError
+impl fmt::Display for JoinProxyInfoError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            JoinProxyInfoError::NoCertificateFound => {
+                write!(f, "No Certificate Found")
+            },
+            JoinProxyInfoError::NotImplementedYet => {
+                write!(f, "No implementation yet!")
+            },
+            JoinProxyInfoError::UreqError(error) => {
+                write!(f, "UREQ error {}", error)
+            }
+        }
+    }
+}
+
+// Implement std::fmt::Debug for AppError
+impl fmt::Debug for JoinProxyInfoError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            JoinProxyInfoError::NoCertificateFound => {
+                write!(f, "No Certificate Found")
+            },
+            JoinProxyInfoError::NotImplementedYet => {
+                write!(f, "No implementation yet!")
+            },
+            JoinProxyInfoError::UreqError(error) => {
+                write!(f, "UREQ error {}", error)
+            }
+        }
+    }
+}
+impl From<ureq::Error> for JoinProxyInfoError {
+    fn from(kind: ureq::Error) -> Self {
+        Self::UreqError(kind)
+    }
+}
+
 impl JoinProxyInfo {
     fn connect_one(self: &mut Self,
-                   addr:   SocketAddr) -> Result<(), ureq::Error> {
+                   addr:   SocketAddr) -> Result<(), JoinProxyInfoError> {
 
         let mut _buf = [0u8; 256];
         let connector = Arc::new(mbedtls_connector::MbedTlsConnector::new(mbedtls::ssl::config::AuthMode::None));
@@ -113,8 +160,7 @@ impl JoinProxyInfo {
                     //num = num + 1;
                 }
             } else {
-                return Err(ureq::ErrorKind::msg(ErrorKind::InvalidUrl,
-                                                format!("no certificate found")));
+                return Err(JoinProxyInfoError::NoCertificateFound);
             }
 
             // now we have the peer certificate copied into cert1.
@@ -133,12 +179,12 @@ impl JoinProxyInfo {
             // This is required when the `Sign` trait is backed by mbedtls v3.
             init_psa_crypto();
 
-            vrq.sign(KEY_PEM_F2_00_02, SignatureAlgorithm::ES256);
+            vrq.sign(KEY_PEM_F2_00_02, SignatureAlgorithm::ES256).unwrap();
 
             let _cbor = vrq.serialize().unwrap();
 
-            return Err(ureq::ErrorKind::msg(ErrorKind::InvalidUrl,
-                                            format!("code incomplete")));
+            return Err(JoinProxyInfoError::NotImplementedYet);
+
         }
 
         /* print it */
