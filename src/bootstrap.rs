@@ -34,18 +34,65 @@ use std::sync::mpsc::{channel,Sender,Receiver};
 use dns_lookup::{lookup_host};
 use url::Url;
 use http::uri::{Builder, Authority};
-use crate::mbedtls_connector;
+
+use native_tls::Protocol;
+use rustls::version::TLS12;
+use rustls::version::TLS13;
+use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
+use rustls::ClientConfig;
+use rustls_pki_types::{CertificateDer, ServerName, UnixTime};
+use ureq;
+
+//use crate::mbedtls_connector;
 
 //use mbedtls::rng::OsEntropy;
 //use mbedtls::rng::CtrDrbg;
 //use mbedtls::ssl::config::{Endpoint, Preset, Transport, AuthMode};
-use mbedtls::ssl::{Config, Context};
+//use mbedtls::ssl::{Config, Context};
 //use mbedtls::x509::Certificate;
 //use mbedtls::Result as TlsResult;
 
 //use ureq::minerva;
 
 use http::Method;
+
+#[derive(Debug)]
+struct AcceptAll {}
+
+impl ServerCertVerifier for AcceptAll {
+    fn verify_server_cert(
+        &self,
+        _end_entity: &CertificateDer,
+        _intermediates: &[CertificateDer],
+        _server_name: &ServerName,
+        _ocsp_response: &[u8],
+        _now: UnixTime,
+    ) -> Result<ServerCertVerified, rustls::Error> {
+        Ok(ServerCertVerified::assertion())
+    }
+
+    fn verify_tls12_signature(
+        &self,
+        _message: &[u8],
+        _cert: &CertificateDer<'_>,
+        _dss: &rustls::DigitallySignedStruct,
+    ) -> Result<HandshakeSignatureValid, rustls::Error> {
+        Ok(HandshakeSignatureValid::assertion())
+    }
+
+    fn verify_tls13_signature(
+        &self,
+        _message: &[u8],
+        _cert: &CertificateDer<'_>,
+        _dss: &rustls::DigitallySignedStruct,
+    ) -> Result<HandshakeSignatureValid, rustls::Error> {
+        Ok(HandshakeSignatureValid::assertion())
+    }
+
+    fn supported_verify_schemes(&self) -> Vec<rustls::SignatureScheme> {
+        todo!()
+    }
+}
 
 #[derive(PartialEq, Debug)]
 pub struct JoinProxyInfo {
@@ -106,7 +153,13 @@ impl JoinProxyInfo {
                    addr:   SocketAddr) -> Result<(), JoinProxyInfoError> {
 
         let mut _buf = [0u8; 256];
-        let connector = Arc::new(mbedtls_connector::MbedTlsConnector::new(mbedtls::ssl::config::AuthMode::None));
+
+        // This is how we narrow down the allowed TLS versions for rustls.
+        let protocol_versions = &[&TLS12, &TLS13];
+
+        let tls_config = rustls::ClientConfig::builder_with_protocol_versions(protocol_versions)
+            .dangerous()
+            .with_custom_certificate_verifier(Arc::new(AcceptAll {}));
 
         let hostname = addr.ip().to_string();
         let authority = Authority::from_sockaddr(addr).unwrap();
@@ -119,7 +172,7 @@ impl JoinProxyInfo {
             .unwrap();
 
         let agent = ureq::builder()
-            .tls_connector(connector.clone())
+            .tls_config(Arc::new(tls_config))
             .timeout_connect(Duration::from_secs(5))
             .timeout(Duration::from_secs(20))
             .build();
@@ -134,6 +187,7 @@ impl JoinProxyInfo {
 
         /* now pull the certificate out of the stream */
         //let certificate = https_stream.get_peer_certificate().unwrap();
+        #[cfg(_YES_)]
         { //--------
             let mbedtls_context    = connector.context.lock().unwrap();
             let certificate_list   = mbedtls_context.peer_cert().unwrap();
@@ -160,6 +214,7 @@ impl JoinProxyInfo {
             cert1
         };
 
+        #[cfg(_YES_)]
         { //--------
             let mut vrq = Voucher::new_vrq();
 
