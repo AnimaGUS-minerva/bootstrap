@@ -22,8 +22,7 @@ use std::net::IpAddr;
 use std::net::TcpStream;
 use std::fmt;
 use std::sync::Arc;
-use std::time::Duration;
-use ureq::{Error, ErrorKind, TlsConnector};
+use ureq::{Error};
 
 //use dns_lookup::{AddrInfo, AddrInfoHints, lookup_host, getaddrinfo, SockType};
 use std::collections::VecDeque;
@@ -35,12 +34,26 @@ use dns_lookup::{lookup_host};
 use url::Url;
 use http::uri::{Builder, Authority};
 
-use native_tls::Protocol;
 use rustls::version::TLS12;
 use rustls::version::TLS13;
 use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
 use rustls::ClientConfig;
 use rustls_pki_types::{CertificateDer, ServerName, UnixTime};
+use ureq::unversioned::transport::RustlsConnector;
+use ureq::unversioned::transport::DefaultConnector;
+use ureq::unversioned::transport::NextTimeout;
+use ureq::unversioned::transport::Transport;
+use ureq::unversioned::transport::tcp::TcpTransport;
+use ureq::unversioned::transport::Either;
+use ureq::unversioned::resolver::ArrayVec;
+use ureq::unversioned::resolver::DefaultResolver;
+use ureq::unversioned::resolver::Resolver;
+use ureq::unversioned::transport::time::{Instant,Duration};
+use ureq::unversioned::transport::{
+    Buffers, ConnectProxyConnector, ConnectionDetails, Connector, LazyBuffers, TcpConnector,
+};
+use ureq::Timeout;
+use ureq::Agent;
 use ureq;
 
 //use crate::mbedtls_connector;
@@ -58,41 +71,6 @@ use http::Method;
 
 #[derive(Debug)]
 struct AcceptAll {}
-
-impl ServerCertVerifier for AcceptAll {
-    fn verify_server_cert(
-        &self,
-        _end_entity: &CertificateDer,
-        _intermediates: &[CertificateDer],
-        _server_name: &ServerName,
-        _ocsp_response: &[u8],
-        _now: UnixTime,
-    ) -> Result<ServerCertVerified, rustls::Error> {
-        Ok(ServerCertVerified::assertion())
-    }
-
-    fn verify_tls12_signature(
-        &self,
-        _message: &[u8],
-        _cert: &CertificateDer<'_>,
-        _dss: &rustls::DigitallySignedStruct,
-    ) -> Result<HandshakeSignatureValid, rustls::Error> {
-        Ok(HandshakeSignatureValid::assertion())
-    }
-
-    fn verify_tls13_signature(
-        &self,
-        _message: &[u8],
-        _cert: &CertificateDer<'_>,
-        _dss: &rustls::DigitallySignedStruct,
-    ) -> Result<HandshakeSignatureValid, rustls::Error> {
-        Ok(HandshakeSignatureValid::assertion())
-    }
-
-    fn supported_verify_schemes(&self) -> Vec<rustls::SignatureScheme> {
-        todo!()
-    }
-}
 
 #[derive(PartialEq, Debug)]
 pub struct JoinProxyInfo {
@@ -155,13 +133,12 @@ impl JoinProxyInfo {
         let mut _buf = [0u8; 256];
 
         // This is how we narrow down the allowed TLS versions for rustls.
-        let protocol_versions = &[&TLS12, &TLS13];
+        //let protocol_versions = &[&TLS12, &TLS13];
 
-        let tls_config = rustls::ClientConfig::builder_with_protocol_versions(protocol_versions)
-            .dangerous()
-            .with_custom_certificate_verifier(Arc::new(AcceptAll {}));
+        //let tls_config = rustls::ClientConfig::builder_with_protocol_versions(protocol_versions);
 
-        let hostname = addr.ip().to_string();
+
+        //let hostname = addr.ip().to_string();
         let authority = Authority::from_sockaddr(addr).unwrap();
         println!("using hostname: {:?}", authority.to_string());
         let uri = Builder::new()
@@ -171,19 +148,34 @@ impl JoinProxyInfo {
             .build()
             .unwrap();
 
-        let agent = ureq::builder()
-            .tls_config(Arc::new(tls_config))
-            .timeout_connect(Duration::from_secs(5))
-            .timeout(Duration::from_secs(20))
-            .build();
+        let config = Agent::config_builder().build();
 
         /* establish the connection */
         let conn = TcpStream::connect(addr).unwrap();
+        //let resolver = DefaultResolver::default();
+        let notconnector = NoConnector::new(conn);
+
+        #[cfg(_YES_)]
+        let details = ConnectionDetails {
+            uri: &uri,
+            addrs: resolver.empty(),
+            config:   &config,
+            resolver: &resolver,
+            request_level: true,  // per-request connection
+            now: Instant::NotHappening,
+            timeout: NextTimeout { after: Duration::NotHappening, reason: Timeout::Connect },
+            run_connector: Arc::new(DefaultConnector::default()),
+        };
+
+        let connector = ().chain(RustlsConnector::default())
+            .chain(notconnector);
+
+        let agent = Agent::with_parts(config,
+                                      connector,
+                                      DefaultResolver::default());
 
         /* do the TLS bits */
-        let connbox = Box::new(conn);
-        let _https_stream = connector.connect(&hostname, connbox)?;
-        let _request = agent.request(&"POST".to_string(), &uri.to_string());
+        let mut _res = agent.post(&uri.to_string());
 
         /* now pull the certificate out of the stream */
         //let certificate = https_stream.get_peer_certificate().unwrap();
@@ -261,6 +253,38 @@ impl JoinProxyInfo {
         Ok(())
     }
 }
+
+
+// implement a Connector that does nothing
+#[derive(Debug)]
+pub struct NoConnector {
+    pub stream: TcpStream
+}
+
+impl NoConnector {
+    pub fn new(stream: TcpStream) -> Self {
+        NoConnector { stream }
+    }
+}
+
+impl<In: Transport> Connector<In> for NoConnector {
+    type Out = Either<In, TcpTransport>;
+
+    fn connect(
+        &self,
+        details: &ConnectionDetails,
+        _chained: Option<In>,
+    ) -> Result<Option<Self::Out>, Error> {
+
+        let config = &details.config;
+        let buffers = LazyBuffers::new(config.input_buffer_size(), config.output_buffer_size());
+        let transport = TcpTransport::new(self.stream.try_clone().unwrap(), buffers);
+        //debug!("connected");
+
+        Ok(Some(Either::B(transport)))
+    }
+}
+
 
 #[derive(Debug)]
 pub struct BootstrapState {
