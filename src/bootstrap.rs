@@ -38,7 +38,7 @@ use rustls::version::TLS12;
 use rustls::version::TLS13;
 use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
 use rustls::ClientConfig;
-use rustls_pki_types::{CertificateDer, ServerName, UnixTime};
+use rustls_pki_types::{CertificateDer, pem::PemObject, ServerName, UnixTime};
 use ureq::unversioned::transport::RustlsConnector;
 use ureq::unversioned::transport::DefaultConnector;
 use ureq::unversioned::transport::NextTimeout;
@@ -55,15 +55,6 @@ use ureq::unversioned::transport::{
 use ureq::Timeout;
 use ureq::Agent;
 use ureq;
-
-//use crate::mbedtls_connector;
-
-//use mbedtls::rng::OsEntropy;
-//use mbedtls::rng::CtrDrbg;
-//use mbedtls::ssl::config::{Endpoint, Preset, Transport, AuthMode};
-//use mbedtls::ssl::{Config, Context};
-//use mbedtls::x509::Certificate;
-//use mbedtls::Result as TlsResult;
 
 //use ureq::minerva;
 
@@ -133,9 +124,10 @@ impl JoinProxyInfo {
         let mut _buf = [0u8; 256];
 
         // This is how we narrow down the allowed TLS versions for rustls.
-        //let protocol_versions = &[&TLS12, &TLS13];
+        let protocol_versions = &[&TLS12, &TLS13];
 
-        //let tls_config = rustls::ClientConfig::builder_with_protocol_versions(protocol_versions);
+        let tls_config = TlsConfig::builder()
+            .build();
 
 
         //let hostname = addr.ip().to_string();
@@ -148,26 +140,14 @@ impl JoinProxyInfo {
             .build()
             .unwrap();
 
-        let config = Agent::config_builder().build();
+        let config = Agent::config_builder().tls_config(tls_config).build();
 
         /* establish the connection */
         let conn = TcpStream::connect(addr).unwrap();
-        //let resolver = DefaultResolver::default();
+
         let notconnector = NoConnector::new(conn);
-
-        #[cfg(_YES_)]
-        let details = ConnectionDetails {
-            uri: &uri,
-            addrs: resolver.empty(),
-            config:   &config,
-            resolver: &resolver,
-            request_level: true,  // per-request connection
-            now: Instant::NotHappening,
-            timeout: NextTimeout { after: Duration::NotHappening, reason: Timeout::Connect },
-            run_connector: Arc::new(DefaultConnector::default()),
-        };
-
-        let connector = ().chain(RustlsConnector::default())
+        let rtls_connnector= RustlsConnector::default();
+        let connector = ().chain(rtls_connnector.clone())
             .chain(notconnector);
 
         let agent = Agent::with_parts(config,
@@ -175,16 +155,15 @@ impl JoinProxyInfo {
                                       DefaultResolver::default());
 
         /* do the TLS bits */
-        let mut _res = agent.post(&uri.to_string());
+        let mut res = agent.post(&uri.to_string());
 
-        /* now pull the certificate out of the stream */
+        /* now pull the certificate from the provisional TLS verifier */
         //let certificate = https_stream.get_peer_certificate().unwrap();
-        #[cfg(_YES_)]
         { //--------
-            let mbedtls_context    = connector.context.lock().unwrap();
-            let certificate_list   = mbedtls_context.peer_cert().unwrap();
+            let reqconfig = res.config();
+            let certificate_list = reqconfig.
             //let mut num = 0;
-            let mut cert1: Option<mbedtls::alloc::Box<mbedtls::x509::Certificate>> = None;
+            let mut cert1: Option<Box<CertificateDer>> = None;
 
             if let Some(certificates) = certificate_list {
                 // only use first certificate returned
