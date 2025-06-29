@@ -1,5 +1,5 @@
 /*
- * Copyright [2021] <mcr@sandelman.ca>
+ * Copyright [2025] <mcr@sandelman.ca>
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -46,25 +46,38 @@ pub struct BootstrapOptions {
 pub mod tests {
     use super::*;
 
-    //#[test]
-    // unclear why these tests do not work
+    // argument parse ignores first argument, which would be argv[0]
+    #[test]
     fn test_parse_args() -> Result<(), std::io::Error> {
         assert_eq!(BootstrapOptions {
             debug_bootstrap: true,
             registrar: None, idevid_cert: None, idevid_priv: None, ldevid_cert: None
-        }, BootstrapOptions::from_iter(&["--debug-bootstrap=true"]));
+        }, BootstrapOptions::from_iter(&["bootstrap", "--debug-bootstrap=true"]));
 
         Ok(())
     }
 
-    //#[test]
+    #[test]
+    fn test_parse_args_ldevid() -> Result<(), std::io::Error> {
+        assert_eq!(BootstrapOptions {
+            debug_bootstrap: false,
+            registrar: None,
+            idevid_cert: None,
+            idevid_priv: None,
+            ldevid_cert: Some("/foo/bar/cert.pem".into())
+        }, BootstrapOptions::from_iter(&["bootstrap", "--ldevid-cert=/foo/bar/cert.pem"]));
+
+        Ok(())
+    }
+
     // unclear why these tests do not work
-    fn test_parse_registrar() -> Result<(), std::io::Error> {
+    #[test]
+    fn test_parse_args_registrar() -> Result<(), std::io::Error> {
         assert_eq!(BootstrapOptions {
             debug_bootstrap: false,
             registrar: Some(Url::parse("https://example.com/brski/rv").unwrap()),
             idevid_cert: None, idevid_priv: None, ldevid_cert: None
-        }, BootstrapOptions::from_iter(&["--registrar=https://example.com/brski/rv"]));
+        }, BootstrapOptions::from_iter(&["bootstrap", "--registrar=https://example.com/brski/rv"]));
 
         Ok(())
     }
