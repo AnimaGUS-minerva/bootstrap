@@ -70,7 +70,6 @@ pub mod tests {
         Ok(())
     }
 
-    // unclear why these tests do not work
     #[test]
     fn test_parse_args_registrar() -> Result<(), std::io::Error> {
         assert_eq!(BootstrapOptions {
@@ -78,6 +77,28 @@ pub mod tests {
             registrar: Some(Url::parse("https://example.com/brski/rv").unwrap()),
             idevid_cert: None, idevid_priv: None, ldevid_cert: None
         }, BootstrapOptions::from_iter(&["bootstrap", "--registrar=https://example.com/brski/rv"]));
+
+        Ok(())
+    }
+    #[test]
+    fn test_parse_args_registrar_with_port() -> Result<(), std::io::Error> {
+        assert_eq!(BootstrapOptions {
+            debug_bootstrap: false,
+            registrar: Some(Url::parse("https://example.com:8443/brski/rv").unwrap()),
+            idevid_cert: None, idevid_priv: None, ldevid_cert: None
+        }, BootstrapOptions::from_iter(&["bootstrap", "--registrar=https://example.com:8443/brski/rv"]));
+
+        Ok(())
+    }
+
+    // this one fails, because an entire URL is required
+    #[allow(dead_code)]
+    fn test_parse_args_registrar_hostname() -> Result<(), std::io::Error> {
+        assert_eq!(BootstrapOptions {
+            debug_bootstrap: false,
+            registrar: Some(Url::parse("https://example.com/").unwrap()),
+            idevid_cert: None, idevid_priv: None, ldevid_cert: None
+        }, BootstrapOptions::from_iter(&["bootstrap", "--registrar=example.com"]));
 
         Ok(())
     }
