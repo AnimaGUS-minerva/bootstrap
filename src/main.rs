@@ -20,11 +20,12 @@ use structopt::StructOpt;
 
 pub mod args;
 pub mod bootstrap;
+use rustls;
 //pub mod mbedtls_connector;
 use bootstrap::BootstrapState;
 
 static VERSION: &str = "0.9.0";
-static DEFAULT_JOIN_THREADS: u16 = 16;
+//static DEFAULT_JOIN_THREADS: u16 = 16;
 
 /*
  * Bootstrap is a program in a few distinct states.
@@ -56,12 +57,13 @@ fn bootstrap(args: args::BootstrapOptions) -> Result<(), String> {
     } else {
         // start loop looking for interfaces,
         // and within that loop, listen for GRASP announcements
+        println!("Started GRASP receiver, looking for Registrars");
     }
 
     // now make loop that looks for new Registrars to process.
     // when Bootstrap.registrar is empty, then wait for signal
     //rt.spawn(async move {   // receiver moved
-    println!("Looking for Registrars using GRASP");
+    println!("Looking for Registrars ...");
     while let Ok(mut reg) = receiver.recv() {
         reg.connect().unwrap();
     }
@@ -81,6 +83,8 @@ fn main () -> Result<(), String> {
 
     let args = args::BootstrapOptions::from_args();
     println!("Options {:?}", args);
+
+    rustls::crypto::ring::default_provider().install_default().expect("Failed to install rustls crypto provider");
 
     bootstrap(args).unwrap();
     return Ok(());
