@@ -17,9 +17,12 @@
 //use std::sync::Arc;
 use structopt::StructOpt;
 //use psa_crypto;
+use tracing_subscriber::{EnvFilter, fmt, prelude::*};
 
 pub mod args;
 pub mod bootstrap;
+pub mod noconnector;
+pub mod acceptstore;
 use rustls;
 //pub mod mbedtls_connector;
 use bootstrap::BootstrapState;
@@ -65,7 +68,10 @@ fn bootstrap(args: args::BootstrapOptions) -> Result<(), String> {
     //rt.spawn(async move {   // receiver moved
     println!("Looking for Registrars ...");
     while let Ok(mut reg) = receiver.recv() {
-        reg.connect().unwrap();
+        match reg.connect() {
+            Ok(r) => { println!("registrar {:?}", r); }
+            Err(e) => { println!("failed to connect to {:?}, error: {:?}", reg, e); }
+        }
     }
 
         // we get here because sender got dropped
@@ -83,6 +89,11 @@ fn main () -> Result<(), String> {
 
     let args = args::BootstrapOptions::from_args();
     println!("Options {:?}", args);
+
+    tracing_subscriber::registry()
+        .with(fmt::layer())
+        .with(EnvFilter::from_default_env())
+        .init();
 
     rustls::crypto::ring::default_provider().install_default().expect("Failed to install rustls crypto provider");
 

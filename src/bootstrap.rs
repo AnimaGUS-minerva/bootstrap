@@ -61,6 +61,8 @@ use ureq::Timeout;
 use ureq::Agent;
 use ureq;
 
+use crate::acceptstore;
+use crate::noconnector;
 
 //use ureq::minerva;
 
@@ -128,7 +130,7 @@ impl JoinProxyInfo {
 
         // This is how we narrow down the allowed TLS versions for rustls.
         let protocol_versions = &[&TLS12, &TLS13];
-        let verifier = Arc::new(AcceptAndStoreAll::empty());
+        let verifier = Arc::new(acceptstore::AcceptAndStoreAll::empty());
         let rustls_config = Arc::new(rustls::ClientConfig::builder_with_provider(provider::default_provider().into())
                                      .with_protocol_versions(protocol_versions)
                                      .unwrap()
@@ -158,17 +160,19 @@ impl JoinProxyInfo {
         let conn = TcpStream::connect(addr).unwrap();
         println!("connected {:?}", conn);
 
-        let notconnector = NoConnector::new(conn);
+        let noconnector = noconnector::NoConnector::new(conn);
         let rtls_connnector= RustlsConnector::default();
-        let connector = ().chain(rtls_connnector)
-            .chain(notconnector);
+        //let connector = ().chain(rtls_connnector)
+        //    .chain(noconnector);
+        let connector = noconnector.chain(rtls_connnector);
 
+        println!("starting the TLS bits with {:?}", connector);
         let agent = Agent::with_parts(config,
                                       connector,
                                       DefaultResolver::default());
 
-        println!("starting the TLS bits");
-        let _res = agent.post(&uri.to_string());
+        let req = agent.post(&uri.to_string());
+        req.prime().unwrap();
 
         /* now pull the certificate from the provisional TLS verifier */
         //let certificate = https_stream.get_peer_certificate().unwrap();
@@ -233,105 +237,6 @@ impl JoinProxyInfo {
         Ok(())
     }
 }
-
-
-// implement a Connector that does nothing
-#[derive(Debug)]
-pub struct NoConnector {
-    pub stream: TcpStream
-}
-
-impl NoConnector {
-    pub fn new(stream: TcpStream) -> Self {
-        NoConnector { stream }
-    }
-}
-
-impl<In: Transport> Connector<In> for NoConnector {
-    type Out = Either<In, TcpTransport>;
-
-    fn connect(
-        &self,
-        details: &ConnectionDetails,
-        _chained: Option<In>,
-    ) -> Result<Option<Self::Out>, Error> {
-
-        let config = &details.config;
-        let buffers = LazyBuffers::new(config.input_buffer_size(), config.output_buffer_size());
-        let transport = TcpTransport::new(self.stream.try_clone().unwrap(), buffers);
-        //debug!("connected");
-
-        Ok(Some(Either::B(transport)))
-    }
-}
-
-// dummy Certificate verifier that keeps track of received certificates
-#[derive(Debug)]
-struct AcceptAndStoreAll<'a> {
-    //pub listOfCertificates: Mutex<Vec<CertificateDer<'a>>>
-    pub ee_cert: Mutex<Option<Arc<CertificateDer<'a>>>>
-}
-
-impl AcceptAndStoreAll<'_> {
-    pub fn empty() -> Self {
-        Self {
-            //listOfCertificates: Mutex::new(Vec::<CertificateDer>::new())
-            ee_cert: Mutex::new(None)
-        }
-    }
-}
-
-impl ServerCertVerifier for AcceptAndStoreAll<'_> {
-    /// do nothing, but succeed, storing the end_entity certificate for later.
-    fn verify_server_cert(
-        &self,
-        end_entity: &CertificateDer,
-        _intermediates: &[CertificateDer],
-        _server_name: &ServerName,
-        _ocsp_response: &[u8],
-        _now: UnixTime,
-    ) -> Result<ServerCertVerified, rustls::Error> {
-
-        let ee = end_entity.clone().into_owned();
-        {
-            let mut ee_cert = self.ee_cert.lock().unwrap();
-            *ee_cert = Some(Arc::new(ee));
-        }
-        //{
-        //  let mut list = self.listOfCertificates.lock().unwrap();
-        //  list.push(ee);
-        //}
-
-        Ok(ServerCertVerified::assertion())
-    }
-
-    fn verify_tls12_signature(
-        &self,
-        message: &[u8],
-        cert: &CertificateDer<'_>,
-        dss: &rustls::DigitallySignedStruct,
-    ) -> Result<HandshakeSignatureValid, rustls::Error> {
-        let algs = provider::default_provider().signature_verification_algorithms;
-        verify_tls12_signature(message, cert, dss, &algs)
-    }
-
-    fn verify_tls13_signature(
-        &self,
-        message: &[u8],
-        cert: &CertificateDer<'_>,
-        dss: &rustls::DigitallySignedStruct,
-    ) -> Result<HandshakeSignatureValid, rustls::Error> {
-        let algs = provider::default_provider().signature_verification_algorithms;
-        verify_tls13_signature(message, cert, dss, &algs)
-    }
-
-    fn supported_verify_schemes(&self) -> Vec<rustls::SignatureScheme> {
-        todo!()
-    }
-}
-
-
-
 
 #[derive(Debug)]
 pub struct BootstrapState {
@@ -427,11 +332,6 @@ pub mod tests {
 
         let ekind = state.add_registrar_by_url(url).map_err(|e| e.kind());
         assert_eq!(Err(std::io::ErrorKind::Other), ekind);
-    }
-
-    #[test]
-    fn create_certificate_verifier() {
-        let _verifier = AcceptAndStoreAll::empty();
     }
 
 }
