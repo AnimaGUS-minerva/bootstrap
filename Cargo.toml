@@ -11,9 +11,12 @@ native-tls = "*"
 rustls-pki-types = "*"
 dns-lookup = "1.0.8"
 ureq       = { version = "3.0", features = ["rustls"], path="/ssw/projects/trentonio/ureq" }
-http       = { version = "1.3.0", path="/ssw/projects/pandora/UPSTREAM/rust-http/worktrees/add_dnsname_authority" }
+http       = { version = "1.3.0", path="/ssw/projects/pandora/UPSTREAM/worktrees/add_dnsname_authority" }
 minerva-voucher = { path = "/ssw/projects/trentonio/minerva-voucher" }
-rand            = "0.4"
+rcgen      = { version = "*", features=["aws_lc_rs"]}
+x509-cert  = { version = "0.3.0-rc.4" }
+rand       = "0.4"
+mcu-if    = { path="/ssw/projects/trentonio/mcu-if" }
 ring = "*"
 # zeroize = "1.3.0"
 tracing-subscriber = { version = "*", features = ["env-filter"] }
@@ -24,9 +27,13 @@ tracing-subscriber = { version = "*", features = ["env-filter"] }
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(_YES_)'] }
 
 [patch.crates-io]
-http      = { path="/ssw/projects/pandora/UPSTREAM/rust-http/worktrees/add_dnsname_authority" }
-ring      = { path="/ssw/projects/pandora/UPSTREAM/ring/worktree/ec-key-load" }
-untrusted = { path="/ssw/projects/pandora/UPSTREAM/untrusted/worktree/constant-eq" }
+mcu-if    = { path="/ssw/projects/trentonio/mcu-if" }
+http      = { path="/ssw/projects/pandora/UPSTREAM/worktrees/add_dnsname_authority" }
+#x509-cert = { path="/ssw/projects/pandora/UPSTREAM/worktrees/pkcs12-encode/x509-cert" }
+#pkcs12    = { path="/ssw/projects/pandora/UPSTREAM/worktrees/pkcs12-encode/pkcs12" }
+#cms       = { path="/ssw/projects/pandora/UPSTREAM/worktrees/pkcs12-encode/cms" }
+ring      = { path="/ssw/projects/pandora/UPSTREAM/worktrees/ec-key-load" }
+untrusted = { path="/ssw/projects/pandora/UPSTREAM/worktrees/constant-eq" }
 
 #
 # Local Variables:

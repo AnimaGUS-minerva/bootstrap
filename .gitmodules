@@ -1,0 +1,3 @@
+[submodule "testdata"]
+	path = testdata
+	url = https://codeberg.org/AnimaGUS-minerva/rfc8366-examples.git
