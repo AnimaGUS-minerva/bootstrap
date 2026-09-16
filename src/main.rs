@@ -18,6 +18,7 @@
 use tracing_subscriber::{EnvFilter, fmt, prelude::*};
 
 use clap::Parser;
+use std::sync::{Arc};
 
 pub mod args;
 pub mod bootstrap;
@@ -54,10 +55,16 @@ fn bootstrap(args: args::BootstrapOptions) -> Result<(), String> {
     let (sender, receiver) = BootstrapState::channel();
     let mut state = BootstrapState::empty(sender);
 
-    //init_psa_crypto();
+    let maybedetails = args.pledge_details().unwrap();
+    if maybedetails.is_none() {
+        println!("Pledge has no working IDevID at {:?} and {:?}",
+                 args.idevid_cert, args.idevid_priv);
+        return Ok(());
+    }
+    let pledgedetails = Arc::new(maybedetails.unwrap());
 
     if let Some(url) = args.registrar {
-        state.add_registrar_by_url(url.clone()).unwrap();
+        state.add_registrar_by_url(pledgedetails.clone(), url.clone()).unwrap();
     } else {
         // start loop looking for interfaces,
         // and within that loop, listen for GRASP announcements
@@ -69,7 +76,7 @@ fn bootstrap(args: args::BootstrapOptions) -> Result<(), String> {
     //rt.spawn(async move {   // receiver moved
     println!("Looking for Registrars ...");
     while let Ok(mut reg) = receiver.recv() {
-        match reg.connect() {
+        match reg.connect(pledgedetails.clone()) {
             Ok(r) => { println!("registrar {:?}", r); }
             Err(e) => { println!("failed to connect to {:?}, error: {:?}", reg, e); }
         }

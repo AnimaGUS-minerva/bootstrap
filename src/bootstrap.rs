@@ -65,14 +65,16 @@ use ureq;
 
 use crate::acceptstore;
 use crate::noconnector;
+use crate::args::{BootstrapOptions,PledgeDetails};
 
 //use ureq::minerva;
 
 use http::Method;
 
-#[derive(PartialEq, Debug)]
+#[derive(Debug)]
 pub struct JoinProxyInfo {
     url:  Url,
+    n_pledge_details:  Arc<PledgeDetails>,
     addrs: VecDeque<SocketAddr>
 }
 
@@ -124,6 +126,7 @@ impl From<ureq::Error> for JoinProxyInfoError {
 
 impl JoinProxyInfo {
     fn connect_one(self: &mut Self,
+                   _details: Arc<PledgeDetails>,
                    addr:   SocketAddr) -> Result<(), JoinProxyInfoError> {
 
         let mut _buf = [0u8; 256];
@@ -190,13 +193,14 @@ impl JoinProxyInfo {
 
         // println!("cert1: {:?}", registrar_cert);
 
+
         #[cfg(_YES_)]
         { //--------
             let mut vrq = Voucher::new_vrq();
 
             vrq.set(Attr::Assertion(Assertion::Proximity))
                 .set(Attr::CreatedOn(1599086034))
-                .set(Attr::SerialNumber(b"00-D0-E5-F2-00-02".to_vec()));
+                .set(Attr::SerialNumber(b"00-D0-E5-F2-00-01".to_vec()));
 
             vrq.sign(KEY_PEM_F2_00_02, SignatureAlgorithm::ES256).unwrap();
 
@@ -219,11 +223,11 @@ impl JoinProxyInfo {
         Ok(())
     }
 
-    pub fn connect(self: &mut Self) -> Result<(), std::io::Error> {
+    pub fn connect(self: &mut Self, n_pledge_details: Arc<PledgeDetails>) -> Result<(), std::io::Error> {
 
         while let Some(addr) = self.addrs.pop_front() {
             println!("found address: {:?}", addr.to_string());
-            let tlserr = self.connect_one(addr);
+            let tlserr = self.connect_one( n_pledge_details, addr);
 
             // examine tlserr for ECONN refused and try next IP.
             match tlserr {
@@ -256,7 +260,9 @@ impl BootstrapState {
         vq
     }
 
-    pub fn add_registrar_by_url(self: &mut Self, url: Url) -> Result<(), std::io::Error> {
+    pub fn add_registrar_by_url(self: &mut Self,
+                                n_pledge_details: Arc<PledgeDetails>,
+                                url: Url) -> Result<(), std::io::Error> {
 
         let hostname = url.host_str().unwrap();
         let maybeport= url.port();
@@ -272,18 +278,23 @@ impl BootstrapState {
         let hosts = lookup_host(hostname)?;
         self.registrars.send(JoinProxyInfo {
             url:   url,
+            n_pledge_details: n_pledge_details.clone(),
             addrs: BootstrapState::addr2sockaddr(hosts, port)
         }).unwrap();
         Ok(())
     }
 
-    pub fn add_registrar_by_ip(self: &mut Self, ip: std::net::IpAddr, port: u16) -> Result<(), std::io::Error> {
+    pub fn add_registrar_by_ip(self: &mut Self,
+                               n_pledge_details: Arc<PledgeDetails>,
+                               ip: std::net::IpAddr,
+                               port: u16) -> Result<(), std::io::Error> {
 
         let mut url = Url::from_file_path("/.well-known/brski/request/voucher").unwrap();
         url.set_ip_host(ip).unwrap();
         let hosts = vec![ip];
         self.registrars.send(JoinProxyInfo {
             url:   url,
+            n_pledge_details: n_pledge_details.clone(),
             addrs: BootstrapState::addr2sockaddr(hosts, port)
         }).unwrap();
         Ok(())
@@ -294,6 +305,17 @@ impl BootstrapState {
 pub mod tests {
     use super::*;
 
+    fn details() -> PledgeDetails {
+        let args = BootstrapOptions {
+            debug_bootstrap: false,
+            registrar: None,
+            ldevid_cert: None,
+            idevid_priv: Some("testdata/00-D0-E5-F2-00-01/key.pem".into()),
+            idevid_cert: Some("testdata/00-D0-E5-F2-00-01/device.crt".into())
+        };
+        args.pledge_details().unwrap().unwrap()
+    }
+
     #[test]
     fn add_registrar_url() -> Result<(), std::io::Error> {
         let url = Url::parse("https://example.com/.well-known/brski/requestvoucher").unwrap();
@@ -301,7 +323,8 @@ pub mod tests {
         let (sender, receiver) = BootstrapState::channel();
 
         let mut state = BootstrapState::empty(sender);
-        state.add_registrar_by_url(url)?;
+        let n_pledge_details  = Arc::new(details());
+        state.add_registrar_by_url(n_pledge_details.clone(), url)?;
 
         let _thing = receiver.recv().unwrap();
         Ok(())
@@ -313,7 +336,8 @@ pub mod tests {
         let mut state = BootstrapState::empty(sender);
 
         let ipaddr = "fe80::1234".parse().unwrap();
-        state.add_registrar_by_ip(ipaddr, 8443)?;
+        let n_pledge_details  = Arc::new(details());
+        state.add_registrar_by_ip(n_pledge_details, ipaddr, 8443)?;
 
         let _thing = receiver.recv().unwrap();
         Ok(())
@@ -327,7 +351,8 @@ pub mod tests {
 
         let mut state = BootstrapState::empty(sender);
 
-        let ekind = state.add_registrar_by_url(url).map_err(|e| e.kind());
+        let n_pledge_details  = Arc::new(details());
+        let ekind = state.add_registrar_by_url(n_pledge_details, url).map_err(|e| e.kind());
         assert_eq!(Err(std::io::ErrorKind::Other), ekind);
     }
 

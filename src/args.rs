@@ -65,9 +65,9 @@ impl BootstrapOptions {
                keydata[7]==b'G' && keydata[8]==b'I' && keydata[9]==b'N';
     }
 
-    pub fn pledge_details(self: Self) -> Result<Option<PledgeDetails>, BsError> {
-        if let Some(certfile) = self.idevid_cert &&
-            let Some(privfile) = self.idevid_priv &&
+    pub fn pledge_details(self: &Self) -> Result<Option<PledgeDetails>, BsError> {
+        if let Some(certfile)  = &self.idevid_cert &&
+            let Some(privfile) = &self.idevid_priv &&
             certfile.exists() &&
             privfile.exists() {
 
@@ -119,14 +119,18 @@ pub mod tests {
 
     #[test]
     fn test_parse_args_ldevid() -> Result<(), std::io::Error> {
-        let args = BootstrapOptions::parse_from(["bootstrap", "--ldevid-cert=testdata/00-D0-E5-F2-00-01/device.crt"]);
+        let args = BootstrapOptions::parse_from([
+            "bootstrap",
+            "--idevid-cert=testdata/00-D0-E5-F2-00-01/device.crt",
+            "--idevid-priv=testdata/00-D0-E5-F2-00-01/key.pem"
+        ]);
 
         assert_eq!(BootstrapOptions {
             debug_bootstrap: false,
             registrar: None,
-            idevid_cert: None,
-            idevid_priv: None,
-            ldevid_cert: Some("testdata/00-D0-E5-F2-00-01/device.crt".into())
+            ldevid_cert: None,
+            idevid_priv: Some("testdata/00-D0-E5-F2-00-01/key.pem".into()),
+            idevid_cert: Some("testdata/00-D0-E5-F2-00-01/device.crt".into())
         }, args);
 
         assert!(args.pledge_details().unwrap().is_some(),
