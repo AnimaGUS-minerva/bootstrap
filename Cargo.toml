@@ -1,20 +1,22 @@
 [package]
 name = "bootstrap"
 version = "0.9.0"
-edition = "2021"
+edition = "2024"
 
 [dependencies]
-structopt  = "0.3"
+clap       = { version = "*", features = ["derive"] }
 url        = "*"
 rustls     = "*"
 native-tls = "*"
-rustls-pki-types = "*"
 dns-lookup = "1.0.8"
+rustls-pki-types = { package = "rustls-pki-types", version = "*", default-features = false }
+webpki     = { package = "rustls-webpki", version="0.103.13", features=["alloc"] }
 ureq       = { version = "3.0", features = ["rustls"], path="/ssw/projects/trentonio/ureq" }
 http       = { version = "1.3.0", path="/ssw/projects/pandora/UPSTREAM/worktrees/add_dnsname_authority" }
 minerva-voucher = { path = "/ssw/projects/trentonio/minerva-voucher" }
 rcgen      = { version = "*", features=["aws_lc_rs"]}
-x509-cert  = { version = "0.3.0-rc.4" }
+der        = { version = "0.8.0" }
+x509-cert  = { version = "*" }
 rand       = "0.4"
 mcu-if    = { path="/ssw/projects/trentonio/mcu-if" }
 ring = "*"
