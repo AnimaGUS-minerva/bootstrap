@@ -1,4 +1,4 @@
 #!/bin/sh
 
 product=testdata/00-D0-E5-F2-00-01
-target/debug/bootstrap --registrar=localhost:8443 --idevid-priv=${product}/key.pem --idevid-cert=${product}/device.crt  
+target/debug/bootstrap --registrar=https://localhost:8443 --idevid-priv=${product}/key.pem --idevid-cert=${product}/device.crt
