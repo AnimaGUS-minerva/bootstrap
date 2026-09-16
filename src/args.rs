@@ -52,6 +52,56 @@ pub struct BootstrapOptions {
     pub ldevid_cert: Option<PathBuf>,
 }
 
+#[derive(Debug)]
+pub struct PledgeDetails {
+    pub private: GenericKeyPair,
+    pub certificate: Certificate
+}
+
+impl BootstrapOptions {
+    fn is_pem_begin(keydata: &Vec<u8>) -> bool {
+        return keydata.len() > 10 && keydata[0]==b'-' && keydata[1]==b'-' && keydata[2]==b'-' &&
+               keydata[3]==b'-' && keydata[4]==b'-' && keydata[5]==b'B' && keydata[6]==b'E' &&
+               keydata[7]==b'G' && keydata[8]==b'I' && keydata[9]==b'N';
+    }
+
+    pub fn pledge_details(self: Self) -> Result<Option<PledgeDetails>, BsError> {
+        if let Some(certfile) = self.idevid_cert &&
+            let Some(privfile) = self.idevid_priv &&
+            certfile.exists() &&
+            privfile.exists() {
+
+                let keydata: Vec<u8> = std::fs::read(privfile)?;
+                // see if it's PEM encoded or not, look for leading -----BEGIN
+                let privsigner = if Self::is_pem_begin(&keydata) {
+                    // okay, it's probably PEM
+                    GenericKeyPair::from_pkcs8_pem(&keydata.as_slice()).unwrap()
+                } else {
+                    // try decoding as DER then
+                    GenericKeyPair::from_pkcs8(&keydata.as_slice()).unwrap()
+                };
+
+                let certdata: Vec<u8> = std::fs::read(certfile)?;
+                // see if it's PEM encoded or not, look for leading -----BEGIN
+                let cert = if Self::is_pem_begin(&certdata) {
+                    // okay, it's probably PEM
+                    let cl = Certificate::load_pem_chain(&certdata).unwrap();
+                    cl[0].clone()
+                } else {
+                    // try decoding as DER then
+                    Certificate::from_der(&certdata).unwrap()
+                };
+
+                return Ok(Some(PledgeDetails {
+                    private: privsigner,
+                    certificate: cert }
+                ));
+            } else {
+                return Ok(None);
+            }
+    }
+}
+
 #[cfg(test)]
 pub mod tests {
     use super::*;
