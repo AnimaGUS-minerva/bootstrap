@@ -84,10 +84,10 @@ impl<In: Transport> Connector<In> for NoConnector {
     fn connect(
         &self,
         details: &ConnectionDetails,
-        chained: Option<In>,
+        _chained: Option<In>,
     ) -> Result<Option<Self::Out>, Error> {
 
-        println!("NoConnector {:?} next: {:?}", self.stream, chained);
+        // println!("NoConnector {:?} next: {:?}", self.stream, chained);
 
         let config = &details.config;
         let buffers = LazyBuffers::new(config.input_buffer_size(), config.output_buffer_size());
