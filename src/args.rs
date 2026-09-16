@@ -1,5 +1,5 @@
 /*
- * Copyright [2025] <mcr@sandelman.ca>
+ * Copyright [2026] <mcr@sandelman.ca>
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -15,30 +15,40 @@
  *
  */
 use std::path::PathBuf;
-use structopt::StructOpt;
+use clap::{Parser};
 use url::Url;
+use ring::{allkeys::GenericKeyPair};
+use x509_cert::Certificate;
+//use rustls_pki_types::{PrivatePkcs8KeyDer};
+use crate::error::BsError;
+use der::{
+    Decode
+};
 
-#[derive(StructOpt, PartialEq, Debug)]
+#[derive(Parser, PartialEq, Debug, Clone)]
+#[command(name="bootstrap")]
+#[command(version = "1.0")]
+#[command(about = "Hermes Connect Pledge BRSKI client", long_about = None)]
 /// Hermes Bootstrap manager
 pub struct BootstrapOptions {
     /// turn on debugging of processing
-    #[structopt(default_value = "false", long, parse(try_from_str))]
+    #[arg(long,num_args(0..=1))]
     pub debug_bootstrap: bool,
 
     /// override search and just connect to Registrar URI provided
-    #[structopt(long, parse(try_from_str = Url::parse))]
+    #[arg(long)]
     pub registrar: Option<Url>,
 
     /// where to find the IDevID certificate
-    #[structopt(long, parse(from_os_str))]
+    #[arg(long)]
     pub idevid_cert: Option<PathBuf>,
 
     /// where to find the IDevID private key
-    #[structopt(long, parse(from_os_str))]
+    #[arg(long)]
     pub idevid_priv: Option<PathBuf>,
 
     /// output file for LDevID after enrollment
-    #[structopt(long, parse(from_os_str))]
+    #[arg(long)]
     pub ldevid_cert: Option<PathBuf>,
 }
 
@@ -52,21 +62,25 @@ pub mod tests {
         assert_eq!(BootstrapOptions {
             debug_bootstrap: true,
             registrar: None, idevid_cert: None, idevid_priv: None, ldevid_cert: None
-        }, BootstrapOptions::from_iter(&["bootstrap", "--debug-bootstrap=true"]));
+        }, BootstrapOptions::parse_from(["bootstrap", "--debug-bootstrap=true"]));
 
         Ok(())
     }
 
     #[test]
     fn test_parse_args_ldevid() -> Result<(), std::io::Error> {
+        let args = BootstrapOptions::parse_from(["bootstrap", "--ldevid-cert=testdata/00-D0-E5-F2-00-01/device.crt"]);
+
         assert_eq!(BootstrapOptions {
             debug_bootstrap: false,
             registrar: None,
             idevid_cert: None,
             idevid_priv: None,
-            ldevid_cert: Some("/foo/bar/cert.pem".into())
-        }, BootstrapOptions::from_iter(&["bootstrap", "--ldevid-cert=/foo/bar/cert.pem"]));
+            ldevid_cert: Some("testdata/00-D0-E5-F2-00-01/device.crt".into())
+        }, args);
 
+        assert!(args.pledge_details().unwrap().is_some(),
+                "Failed to read device.crt (did you submodule init?)");
         Ok(())
     }
 
@@ -76,7 +90,8 @@ pub mod tests {
             debug_bootstrap: false,
             registrar: Some(Url::parse("https://example.com/brski/rv").unwrap()),
             idevid_cert: None, idevid_priv: None, ldevid_cert: None
-        }, BootstrapOptions::from_iter(&["bootstrap", "--registrar=https://example.com/brski/rv"]));
+        }, BootstrapOptions::parse_from(["bootstrap",
+                                         "--registrar=https://example.com/brski/rv"]));
 
         Ok(())
     }
@@ -86,7 +101,8 @@ pub mod tests {
             debug_bootstrap: false,
             registrar: Some(Url::parse("https://example.com:8443/brski/rv").unwrap()),
             idevid_cert: None, idevid_priv: None, ldevid_cert: None
-        }, BootstrapOptions::from_iter(&["bootstrap", "--registrar=https://example.com:8443/brski/rv"]));
+        }, BootstrapOptions::parse_from(["bootstrap",
+                                         "--registrar=https://example.com:8443/brski/rv"]));
 
         Ok(())
     }
@@ -98,7 +114,8 @@ pub mod tests {
             debug_bootstrap: false,
             registrar: Some(Url::parse("https://example.com/").unwrap()),
             idevid_cert: None, idevid_priv: None, ldevid_cert: None
-        }, BootstrapOptions::from_iter(&["bootstrap", "--registrar=example.com"]));
+        }, BootstrapOptions::parse_from(["bootstrap",
+                                         "--registrar=example.com"]));
 
         Ok(())
     }

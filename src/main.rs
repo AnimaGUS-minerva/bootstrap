@@ -14,15 +14,16 @@
    limitations under the License.
  *
  */
-//use std::sync::Arc;
-use structopt::StructOpt;
-//use psa_crypto;
+
 use tracing_subscriber::{EnvFilter, fmt, prelude::*};
+
+use clap::Parser;
 
 pub mod args;
 pub mod bootstrap;
 pub mod noconnector;
 pub mod acceptstore;
+pub mod error;
 use rustls;
 //pub mod mbedtls_connector;
 use bootstrap::BootstrapState;
@@ -87,7 +88,7 @@ fn main () -> Result<(), String> {
 
     println!("Hermes Bootstrap {}", VERSION);
 
-    let args = args::BootstrapOptions::from_args();
+    let args = args::BootstrapOptions::parse();
     println!("Options {:?}", args);
 
     tracing_subscriber::registry()
@@ -96,6 +97,9 @@ fn main () -> Result<(), String> {
         .init();
 
     rustls::crypto::ring::default_provider().install_default().expect("Failed to install rustls crypto provider");
+
+    // load credentials
+
 
     bootstrap(args).unwrap();
     return Ok(());

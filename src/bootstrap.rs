@@ -33,6 +33,8 @@ use std::sync::mpsc::{channel,Sender,Receiver};
 use dns_lookup::{lookup_host};
 use url::Url;
 use http::uri::{Builder, Authority};
+use rcgen::{KeyPair};
+use x509_cert::Certificate;
 
 use rustls::version::TLS12;
 use rustls::version::TLS13;
@@ -73,8 +75,6 @@ pub struct JoinProxyInfo {
     url:  Url,
     addrs: VecDeque<SocketAddr>
 }
-
-
 
 // Custom error for JoinProxyInfo.
 pub enum JoinProxyInfoError {
@@ -176,9 +176,9 @@ impl JoinProxyInfo {
 
         /* now pull the certificate from the provisional TLS verifier */
         //let certificate = https_stream.get_peer_certificate().unwrap();
-        let registrar_cert = {
+        let _registrar_cert = {
             let l_ee_cert = verifier.ee_cert.lock().unwrap();
-            println!("fetching certificate {:?}", l_ee_cert);
+            // println!("fetching certificate {:?}", l_ee_cert);
 
             if let Some(cert1) = l_ee_cert.clone() {
                 // now we have the peer certificate copied into cert1 as Arc<>
@@ -188,7 +188,7 @@ impl JoinProxyInfo {
             }
         };
 
-        println!("cert1: {:?}", registrar_cert);
+        // println!("cert1: {:?}", registrar_cert);
 
         #[cfg(_YES_)]
         { //--------
@@ -197,9 +197,6 @@ impl JoinProxyInfo {
             vrq.set(Attr::Assertion(Assertion::Proximity))
                 .set(Attr::CreatedOn(1599086034))
                 .set(Attr::SerialNumber(b"00-D0-E5-F2-00-02".to_vec()));
-
-            // This is required when the `Sign` trait is backed by mbedtls v3.
-            //init_psa_crypto();
 
             vrq.sign(KEY_PEM_F2_00_02, SignatureAlgorithm::ES256).unwrap();
 
